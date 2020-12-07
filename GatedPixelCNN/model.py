@@ -70,10 +70,10 @@ class GatedPixelCNN(nn.Module):
         self.input = GatedBlock(mask_type='A', in_channels=C, out_channels=num_h_filters, kernel_size=7, **kwargs)
         self.gated_blocks = nn.ModuleList()
         for _ in range(num_layers):
-            # if dependent_colors:
-            #     self.gated_blocks.append(StackLayerNorm(num_h_filters // 3, dependent_colors=dependent_colors))
-            # else:
-            #     self.gated_blocks.append(StackLayerNorm(num_h_filters, dependent_colors=dependent_colors))
+            if dependent_colors:
+                self.gated_blocks.append(StackLayerNorm(num_h_filters // 3, dependent_colors=dependent_colors))
+            else:
+                self.gated_blocks.append(StackLayerNorm(num_h_filters, dependent_colors=dependent_colors))
             self.gated_blocks.append(GatedBlock('B', in_channels=num_h_filters, out_channels=num_h_filters,
                                                 kernel_size=7, **kwargs))
         self.output = nn.Sequential(nn.ReLU(), MaskedConv2D(mask_type='B', in_channels=num_h_filters,
@@ -88,7 +88,7 @@ class GatedPixelCNN(nn.Module):
         batch_size = x.shape[0]
         # scale input
         out = x.float()
-        # out = (x.float() / (self.num_colors - 1) - 0.5) / 0.5
+        out = (x.float() / (self.num_colors - 1) - 0.5) / 0.5
         # double channel size for gated block
         vertical, horizontal, _ = self.input(out, out)
         skip_sum = torch.zeros_like(horizontal)

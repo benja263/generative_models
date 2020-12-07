@@ -60,8 +60,7 @@ class GatedMaskedConv2d(nn.Conv2d):
 
     def forward(self, x):
         self.weight.data *= self.mask
-        out = super(GatedMaskedConv2d, self).forward(x)
-        return out
+        return super(GatedMaskedConv2d, self).forward(x)
 
 
 class MaskedConv2D(nn.Conv2d):
