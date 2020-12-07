@@ -1,11 +1,12 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 
 from utils import DEVICE
 
 
-def train_epoch(model, data_loader, optimizer, use_targets=False, grad_clip=None, scheduler=None,
+def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None, scheduler=None,
                 visible=None, binarize=True):
     """
     Train model for 1 epoch and return dictionary with the average training metric values
@@ -23,9 +24,9 @@ def train_epoch(model, data_loader, optimizer, use_targets=False, grad_clip=None
     model.train(mode=True)
     batch_losses = []
     for batch_idx, batch in enumerate(data_loader):
-        x, y = process_data(batch, use_targets, binarize)
+        x, y = process_data(batch, num_classes, binarize)
         batch_size = x.shape[0]
-        if use_targets:
+        if num_classes:
             batch_loss = model.loss(x, y)
         else:
             batch_loss = model.loss(x)
@@ -45,7 +46,7 @@ def train_epoch(model, data_loader, optimizer, use_targets=False, grad_clip=None
     return np.mean(batch_losses)
 
 
-def evaluate(model, data_loader, use_targets=False, binarize=True):
+def evaluate(model, data_loader, num_classes=None, binarize=True):
     """
 
     :param model:
@@ -56,9 +57,9 @@ def evaluate(model, data_loader, use_targets=False, binarize=True):
     total_loss = 0
     with torch.no_grad():
         for batch in data_loader:
-            x, y = process_data(batch, use_targets, binarize)
+            x, y = process_data(batch, num_classes, binarize)
             batch_size = x.shape[0]
-            if use_targets:
+            if num_classes:
                 batch_loss = model.loss(x, y)
             else:
                 batch_loss = model.loss(x)
@@ -66,10 +67,13 @@ def evaluate(model, data_loader, use_targets=False, binarize=True):
     return total_loss.item() / len(data_loader)
 
 
-def process_data(batch, use_targets, binarize):
+def process_data(batch, num_classes, binarize):
+    if not isinstance(batch, list):
+        return batch.to(DEVICE), None
     x, y = batch
     if binarize:
         x = (x > 0.5).byte()
-    if use_targets:
+    if num_classes:
+        y = F.one_hot(y, num_classes).float()
         return x.to(DEVICE), y.to(DEVICE)
     return x.to(DEVICE), None

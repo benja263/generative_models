@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class GatedMaskedConv2d(nn.Conv2d):
-    def __init__(self, mask_type, mask_orientation, color_channels=False, **kwargs):
+    def __init__(self, mask_type, mask_orientation, dependent_colors=False, **kwargs):
         """
         Masked 2D-Convolution
 
@@ -16,49 +16,56 @@ class GatedMaskedConv2d(nn.Conv2d):
         :param int pad: padding
         """
         super(GatedMaskedConv2d, self).__init__(**kwargs, bias=False)
+        ch_out, _, _, _ = self.weight.size()
         assert mask_type in ['A', 'B']
         assert mask_orientation in ['vertical', 'horizontal']
-        self.create_mask(mask_type, mask_orientation)
+        self.create_mask(mask_type, mask_orientation, dependent_colors)
 
-    def create_mask(self, mask_type, mask_orientation):
+    def create_mask(self, mask_type, mask_orientation, dependent_colors):
         ch_out, ch_in, height, width = self.weight.size()
-        mask = torch.ones(ch_out, ch_in, height, width, dtype=torch.uint8)
-        mask[:, :, height // 2 + 1:, :] = 0
+        self.register_buffer('mask', torch.zeros_like(self.weight, dtype=torch.uint8))
         if mask_orientation == 'horizontal':
-            mask[:, :, :, width // 2 + 1:] = 0
-            mask[:, :, :height // 2, :] = 0
-        if mask_type == 'A':
-            # First Convolution Only
-            # => Restricting connections to
-            #    already predicted neighboring channels in current pixel
-            mask[:, :, height // 2, width // 2] = 0
-            if mask_orientation == 'vertical':
-                mask[:, :, height // 2, :] = 0
-
-        assert ch_out % 3 == 0 and ch_in % 3 == 0
-        one_third_in, one_third_out = ch_out // 3, ch_in // 3
-        if mask_type == 'B':
-            self.mask[:one_third_out, :one_third_in, height // 2, width // 2] = 1
-            self.mask[one_third_out:2 * one_third_out, :2 * one_third_in, height // 2, width // 2] = 1
-            self.mask[2 * one_third_out:, :, height // 2, width // 2] = 1
+            self.mask[:, :, height // 2, :width // 2] = 1
+            if dependent_colors:
+                self.dependent_color_masking(self.weight.size(), mask_type, mask_orientation)
+            elif mask_type == 'B':
+                self.mask[:, :, height // 2, width // 2] = 1
         else:
-            self.mask[one_third_out:2 * one_third_out, :one_third_in, height // 2, width // 2] = 1
-            self.mask[2 * one_third_out:, :2 * one_third_in, height // 2, width // 2] = 1
+            self.mask[:, :, :height // 2, :] = 1
+            if dependent_colors:
+                self.dependent_color_masking(self.weight.size(), mask_type, mask_orientation)
+            else:
+                self.mask[:, :, height // 2] = 1
 
-        self.register_buffer('mask', mask)
-        # if class_cond:
-        #     self.class_cond = nn.Linear(1, ch_out)
+    def dependent_color_masking(self, shape, mask_type, mask_orientation):
+        ch_out, ch_in, height, width = shape
+        assert ch_out % 3 == 0 and ch_in % 3 == 0
+        one_third_in, one_third_out = ch_in // 3, ch_out // 3
+        if mask_orientation == 'horizontal':
+            if mask_type == 'B':
+                self.mask[:one_third_out, :one_third_in, height // 2, width // 2] = 1
+                self.mask[one_third_out:2 * one_third_out, :2 * one_third_in, height // 2, width // 2] = 1
+                self.mask[2 * one_third_out:, :, height // 2, width // 2] = 1
+            else:
+                self.mask[one_third_out:2 * one_third_out, :one_third_in, height // 2, width // 2] = 1
+                self.mask[2 * one_third_out:, :2 * one_third_in, height // 2, width // 2] = 1
+        else:
+            if mask_type == 'B':
+                self.mask[:one_third_out, :one_third_in, height // 2] = 1
+                self.mask[one_third_out:2 * one_third_out, :2 * one_third_in, height // 2] = 1
+                self.mask[2 * one_third_out:, :, height // 2] = 1
+            else:
+                self.mask[one_third_out:2 * one_third_out, :one_third_in, height // 2] = 1
+                self.mask[2 * one_third_out:, :2 * one_third_in, height // 2] = 1
 
-    def forward(self, x, y=None):
+    def forward(self, x):
         self.weight.data *= self.mask
         out = super(GatedMaskedConv2d, self).forward(x)
-        if y is not None:
-            out = out + self.class_cond(y).view(y.shape[0], -1, 1, 1)
         return out
 
 
 class MaskedConv2D(nn.Conv2d):
-    def __init__(self, mask_type, class_cond=None, **kwargs):
+    def __init__(self, mask_type, dependent_colors=False, num_classes=None, **kwargs):
         """
         Masked 2D-Convolution
 
@@ -72,24 +79,33 @@ class MaskedConv2D(nn.Conv2d):
         super(MaskedConv2D, self).__init__(**kwargs, bias=False)
         self.mask_type = mask_type
         ch_out, ch_in, height, width = self.weight.size()
-        mask = torch.ones(ch_out, ch_in, height, width, dtype=torch.uint8)
-        if mask_type == 'A':
-            # First Convolution Only
-            # => Restricting connections to
-            #    already predicted neighboring channels in current pixel
-            mask[:, :, height // 2, width // 2:] = 0
+        self.register_buffer('mask', torch.zeros_like(self.weight, dtype=torch.uint8))
+        self.mask[:, :, :height // 2] = 1
+        self.mask[:, :, height // 2, :width // 2] = 1
+        if dependent_colors:
+            self.dependent_color_masking(self.weight.size(), mask_type)
+        elif mask_type == 'B':
+            self.mask[:, :, height // 2, width // 2] = 1
+        if num_classes is not None:
+            self.cond_bias = nn.Linear(num_classes, ch_out)
+
+    def dependent_color_masking(self, weight_shape, mask_type):
+        ch_out, ch_in, height, width = weight_shape
+        assert ch_out % 3 == 0 and ch_in % 3 == 0
+        one_third_in, one_third_out = ch_in // 3, ch_out // 3
+        if mask_type == 'B':
+            self.mask[:one_third_out, :one_third_in, height // 2, width // 2] = 1
+            self.mask[one_third_out:2 * one_third_out, :2 * one_third_in, height // 2, width // 2] = 1
+            self.mask[2 * one_third_out:, :, height // 2, width // 2] = 1
         else:
-            mask[:, :, height // 2, width // 2 + 1:] = 0
-        mask[:, :, height // 2 + 1:] = 0
-        self.register_buffer('mask', mask)
-        if class_cond:
-            self.class_cond = nn.Linear(1, ch_out)
+            self.mask[one_third_out:2 * one_third_out, :one_third_in, height // 2, width // 2] = 1
+            self.mask[2 * one_third_out:, :2 * one_third_in, height // 2, width // 2] = 1
 
     def forward(self, x, y=None):
         self.weight.data *= self.mask
         out = super(MaskedConv2D, self).forward(x)
         if y is not None:
-            out = out + self.class_cond(y).view(y.shape[0], -1, 1, 1)
+            out = out + self.cond_bias(y).view(y.shape[0], -1, 1, 1)
         return out
 
 
@@ -113,8 +129,8 @@ class GatedActivation(nn.Module):
 
 
 class LayerNorm(nn.LayerNorm):
-    def __init__(self, dependent_colors=False, *args, **kwargs):
-        super(LayerNorm, self).__init__(*args, **kwargs)
+    def __init__(self, num_filters, dependent_colors=False, *args, **kwargs):
+        super(LayerNorm, self).__init__(num_filters, *args, **kwargs)
         self.dependent_colors = dependent_colors
 
     def forward(self, x):
@@ -130,10 +146,11 @@ class LayerNorm(nn.LayerNorm):
 
 class StackLayerNorm(nn.Module):
   def __init__(self, n_filters, dependent_colors=False):
-    super().__init__()
+    super(StackLayerNorm, self).__init__()
     self.h_layer_norm = LayerNorm(n_filters, dependent_colors)
     self.v_layer_norm = LayerNorm(n_filters, dependent_colors)
 
   def forward(self, vertical, horizontal):
     return self.v_layer_norm(vertical), self.h_layer_norm(horizontal)
+
 
