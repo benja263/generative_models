@@ -5,9 +5,13 @@ from tqdm import tqdm
 from utils import DEVICE
 
 
-def train_epoch(model, data_loader, optimizer, use_targets=False, grad_clip=None, scheduler=None, visible=None):
+def train_epoch(model, data_loader, optimizer, use_targets=False, grad_clip=None, scheduler=None,
+                visible=None, binarize=True):
     """
     Train model for 1 epoch and return dictionary with the average training metric values
+    :param scheduler:
+    :param binarize:
+    :param visible:
     :param nn.Module model:
     :param DataLoader data_loader:
     :param optimizer:
@@ -19,7 +23,7 @@ def train_epoch(model, data_loader, optimizer, use_targets=False, grad_clip=None
     model.train(mode=True)
     batch_losses = []
     for batch_idx, batch in enumerate(data_loader):
-        x, y = process_data(batch, use_targets)
+        x, y = process_data(batch, use_targets, binarize)
         batch_size = x.shape[0]
         if use_targets:
             batch_loss = model.loss(x, y)
@@ -41,7 +45,7 @@ def train_epoch(model, data_loader, optimizer, use_targets=False, grad_clip=None
     return np.mean(batch_losses)
 
 
-def evaluate(model, data_loader, use_targets=False):
+def evaluate(model, data_loader, use_targets=False, binarize=True):
     """
 
     :param model:
@@ -52,7 +56,7 @@ def evaluate(model, data_loader, use_targets=False):
     total_loss = 0
     with torch.no_grad():
         for batch in data_loader:
-            x, y = process_data(batch, use_targets)
+            x, y = process_data(batch, use_targets, binarize)
             batch_size = x.shape[0]
             if use_targets:
                 batch_loss = model.loss(x, y)
@@ -62,8 +66,10 @@ def evaluate(model, data_loader, use_targets=False):
     return total_loss.item() / len(data_loader)
 
 
-def process_data(batch, use_targets):
+def process_data(batch, use_targets, binarize):
     x, y = batch
+    if binarize:
+        x = (x > 0.5).byte()
     if use_targets:
         return x.to(DEVICE), y.to(DEVICE)
     return x.to(DEVICE), None

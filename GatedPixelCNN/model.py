@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from GatedPixelCNN.layers import GatedActivation, MaskedConv2d, StackLayerNorm, OutputMaskedConv2D
+from GatedPixelCNN.layers import GatedActivation, GatedMaskedConv2d, StackLayerNorm, MaskedConv2D
 from utils import DEVICE
 
 
@@ -13,14 +13,14 @@ class GatedBlock(nn.Module):
         assert mask_type in ['A', 'B']
         padding = int((kernel_size - stride) / 2)
         # vertical stack
-        self.vertical = MaskedConv2d(mask_type=mask_type, mask_orientation='vertical',
-                                     in_channels=in_channels, out_channels=2 * out_channels,
-                                     kernel_size=kernel_size, padding=padding)
+        self.vertical = GatedMaskedConv2d(mask_type=mask_type, mask_orientation='vertical',
+                                          in_channels=in_channels, out_channels=2 * out_channels,
+                                          kernel_size=kernel_size, padding=padding)
         self.v_to_h = nn.Conv2d(2 * out_channels, 2 * out_channels, kernel_size=1, bias=False)
         # horizontal stack
-        self.horizontal = MaskedConv2d(mask_type=mask_type, mask_orientation='horizontal',
-                                       in_channels=in_channels, out_channels=2 * out_channels,
-                                       kernel_size=(1, kernel_size), padding=(0, padding))
+        self.horizontal = GatedMaskedConv2d(mask_type=mask_type, mask_orientation='horizontal',
+                                            in_channels=in_channels, out_channels=2 * out_channels,
+                                            kernel_size=(1, kernel_size), padding=(0, padding))
         self.mask_type = mask_type
         self.res = nn.Conv2d(out_channels, out_channels, kernel_size=1, bias=False)
         if mask_type == 'B':
@@ -45,13 +45,14 @@ class GatedBlock(nn.Module):
         x_h_stack = x_h_stack + self.v_to_h(x_vertical)
         x_h_stack = self.activation(x_h_stack)
 
-        x_h_stack = self.res(x_h_stack)
+        x_res = self.res(x_h_stack)
         skip_output = None
         if self.mask_type == 'B':
             # no res connections for causal layers
-            x_h_stack = x_h_stack + x_horizontal
+            x_res = x_res + x_horizontal
             skip_output = self.skip(x_h_stack)
-        return x_vertical_stack, x_h_stack, skip_output
+        return x_vertical_stack, x_res, skip_output
+        # return x_vertical_stack, x_res
 
 
 class GatedPixelCNN(nn.Module):
@@ -65,30 +66,31 @@ class GatedPixelCNN(nn.Module):
         self.input = GatedBlock(mask_type='A', in_channels=C, out_channels=num_filters, kernel_size=7)
         self.gated_blocks = nn.ModuleList()
         for _ in range(num_layers):
-            self.gated_blocks.extend([StackLayerNorm(num_filters),
+            # StackLayerNorm(num_filters),
+            self.gated_blocks.extend([
                                       GatedBlock('B', num_filters, num_filters, kernel_size=7)])
-        self.output = nn.Sequential(nn.ReLU(), OutputMaskedConv2D(mask_type='B', in_channels=num_layers*num_filters,
-                                                                  out_channels=output_filters, kernel_size=1),
+        self.output = nn.Sequential(nn.ReLU(), MaskedConv2D(mask_type='B', in_channels=num_filters,
+                                                            out_channels=output_filters, kernel_size=1),
                                     nn.ReLU(),
-                                    OutputMaskedConv2D(mask_type='B',
-                                                       in_channels=output_filters, out_channels=num_colors * C,
-                                                       kernel_size=1))
+                                    MaskedConv2D(mask_type='B',
+                                                 in_channels=output_filters, out_channels=num_colors * C,
+                                                 kernel_size=1))
 
     def forward(self, x):
         batch_size = x.shape[0]
         # scale input
-        out = (x.float() / (self.num_colors - 1) - 0.5) / 0.5
+        out = x.float()
+        # out = (x.float() / (self.num_colors - 1) - 0.5) / 0.5
         # double channel size for gated block
         vertical, horizontal, _ = self.input(out, out)
-        skip_sum = []
+        skip_sum = torch.zeros_like(horizontal)
         for gated_block in self.gated_blocks:
             if isinstance(gated_block, StackLayerNorm):
                 vertical, horizontal = gated_block(vertical, horizontal)
             else:
                 vertical, horizontal, skip = gated_block(vertical, horizontal)
-                skip_sum.append(skip)
+                skip_sum += skip
         # horizontal output
-        skip_sum = torch.cat(skip_sum, dim=1)
         out = self.output(skip_sum)
         return out.view(batch_size, self.num_channels, self.num_colors, *self.input_shape[1:]).permute(0, 2, 1, 3, 4)
 
