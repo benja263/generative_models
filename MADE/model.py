@@ -76,7 +76,7 @@ class MADE(nn.Module):
                         prog.update()
             prog = tqdm(total=self.D, desc='Sample') if visible else None
             _sample(prog)
-        return samples.view(num_samples, *self.input_shape).cpu().numpy()
+        return samples.view(num_samples, *self.input_shape).cpu()
 
 
 def create_masks(input_shape, class_values, h_layers, one_hot_input):

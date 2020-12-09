@@ -6,7 +6,7 @@ from tqdm import tqdm
 from utils import DEVICE
 
 
-def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None,
+def train_epoch(model, data_loader, optimizer, num_classes=None, grad_clip=None,
                 scheduler=None, visible=None, binarize=True):
     """
     Train model for 1 epoch and return dictionary with the average training metric values
@@ -84,7 +84,7 @@ def process_data(batch, num_classes, binarize):
         x, y = batch
     if binarize:
         x = (x > 0.5).byte()
-    if y is not None:
+    if num_classes is not None:
         y = F.one_hot(y, num_classes).float()
         return x.to(DEVICE), y.to(DEVICE)
     return x.to(DEVICE), y

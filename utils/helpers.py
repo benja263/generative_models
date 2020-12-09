@@ -1,14 +1,13 @@
 import os
 import pickle
 from os.path import exists, dirname
-from pathlib import Path
 
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from torchvision.utils import make_grid
 
-DATA_PATH = Path('../data')
+from utils import DATA_PATH
 
 
 def load_data(name):

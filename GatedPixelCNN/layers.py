@@ -9,7 +9,7 @@ import torch.nn.functional as F
 class CroppedConv2d(nn.Conv2d):
     def __init__(self, *args, **kwargs):
         """
-        Cropeed 2D convolution
+        Cropped 2D convolution replacing the need to mask the vertical stack
         :param args:
         :param kwargs:
         """
@@ -23,67 +23,6 @@ class CroppedConv2d(nn.Conv2d):
         v_to_h_out = x[:, :, :-kernel_height - 1, :]
 
         return v_out, v_to_h_out
-
-#
-# class GatedMaskedConv2d(nn.Conv2d):
-#     def __init__(self, mask_type, mask_orientation, dependent_colors=False, **kwargs):
-#         """
-#         Masked 2D-Convolution
-#
-#         :param str mask_type: type 'A' or 'B'
-#         :param int c_in: number of input channels
-#         :param int c_out: number of output channels
-#         :param tuple or int kernel_size: kernel size
-#         :param str mask_orientation: 'vertical' or 'horizontal'
-#         :param int stride:
-#         :param int pad: padding
-#         """
-#         super(GatedMaskedConv2d, self).__init__(**kwargs, bias=False)
-#         ch_out, _, _, _ = self.weight.size()
-#         assert mask_type in ['A', 'B']
-#         assert mask_orientation in ['vertical', 'horizontal']
-#         self.create_mask(mask_type, mask_orientation, dependent_colors)
-#
-#     def create_mask(self, mask_type, mask_orientation, dependent_colors):
-#         ch_out, ch_in, height, width = self.weight.size()
-#         self.register_buffer('mask', torch.zeros_like(self.weight, dtype=torch.uint8))
-#         if mask_orientation == 'horizontal':
-#             self.mask[:, :, height // 2, :width // 2] = 1
-#             if dependent_colors:
-#                 self.dependent_color_masking(self.weight.size(), mask_type, mask_orientation)
-#             elif mask_type == 'B':
-#                 self.mask[:, :, height // 2, width // 2] = 1
-#         else:
-#             self.mask[:, :, :height // 2, :] = 1
-#             if dependent_colors:
-#                 self.dependent_color_masking(self.weight.size(), mask_type, mask_orientation)
-#             else:
-#                 self.mask[:, :, height // 2, width // 2] = 1
-#
-#     def dependent_color_masking(self, shape, mask_type, mask_orientation):
-#         ch_out, ch_in, height, width = shape
-#         assert ch_out % 3 == 0 and ch_in % 3 == 0
-#         one_third_in, one_third_out = ch_in // 3, ch_out // 3
-#         if mask_orientation == 'horizontal':
-#             if mask_type == 'B':
-#                 self.mask[:one_third_out, :one_third_in, height // 2, width // 2] = 1
-#                 self.mask[one_third_out:2 * one_third_out, :2 * one_third_in, height // 2, width // 2] = 1
-#                 self.mask[2 * one_third_out:, :, height // 2, width // 2] = 1
-#             else:
-#                 self.mask[one_third_out:2 * one_third_out, :one_third_in, height // 2, width // 2] = 1
-#                 self.mask[2 * one_third_out:, :2 * one_third_in, height // 2, width // 2] = 1
-#         else:
-#             if mask_type == 'B':
-#                 self.mask[:one_third_out, :one_third_in, height // 2] = 1
-#                 self.mask[one_third_out:2 * one_third_out, :2 * one_third_in, height // 2] = 1
-#                 self.mask[2 * one_third_out:, :, height // 2] = 1
-#             else:
-#                 self.mask[one_third_out:2 * one_third_out, :one_third_in, height // 2] = 1
-#                 self.mask[2 * one_third_out:, :2 * one_third_in, height // 2] = 1
-#
-#     def forward(self, x):
-#         self.weight.data *= self.mask
-#         return super(GatedMaskedConv2d, self).forward(x)
 
 
 class MaskedConv2D(nn.Conv2d):
@@ -170,8 +109,9 @@ class GatedBlockLayerNorm(nn.Module):
         :param bool color_conditioning: are color channels dependent
         """
         super(GatedBlockLayerNorm, self).__init__()
-        self.h_layer_norm = LayerNorm(n_filters, color_conditioning)
-        self.v_layer_norm = LayerNorm(n_filters, color_conditioning)
+        h_filters = n_filters // 3 if color_conditioning else n_filters
+        self.h_layer_norm = LayerNorm(h_filters, color_conditioning)
+        self.v_layer_norm = LayerNorm(n_filters, False)
 
     def forward(self, x):
         v_x, h_x = x.chunk(2, dim=1)

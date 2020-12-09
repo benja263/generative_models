@@ -2,33 +2,25 @@
 Script for training a GatedPixelCNN model on the MNIST dataset
 """
 import argparse
+from pathlib import Path
 
+import numpy as np
+import torch
+import torch.nn.functional as F
 import torch.utils.data as data
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.optim import Adam, lr_scheduler
 
 from GatedPixelCNN.model import GatedPixelCNN
-from utils.helpers import *
-from utils.train import *
-from pathlib import Path
-import torch.nn.functional as F
+from utils.helpers import load_pickle, save_model, save_training_plot, save_samples_plot
+from utils.train import train_epoch, evaluate, DEVICE
 
 
 def train(train_data, test_data, tr_params, model_params, data_shape, output_dir, filename):
-    """
 
-    :param filename:
-    :param output_dir:
-    :param model_params:
-    :param train_data:
-    :param test_data:
-    :param tr_params:
-    :param data_shape:
-    :return:
-    """
     num_epochs, lr, grad_clip = tr_params['num_epochs'], tr_params['lr'], tr_params['grad_clip']
-    binarize, batch_size = tr_params['binarize'], tr_params['batch_size']
+    binarize, batch_size, save_every = tr_params['binarize'], tr_params['batch_size'], tr_params['save_every']
 
     train_loader = data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
     test_loader = data.DataLoader(test_data, batch_size=batch_size)
@@ -43,13 +35,15 @@ def train(train_data, test_data, tr_params, model_params, data_shape, output_dir
         tr_loss = train_epoch(model, train_loader, optimizer, num_classes, grad_clip, scheduler,
                               visible=epoch+1 if tr_params['visible'] is not None else None,
                               binarize=binarize)
-        print('--Evaluating--')
+        print('-- Evaluating --')
         test_loss = evaluate(model, test_loader, num_classes, binarize=binarize)
         print(f'Epoch {epoch + 1}/{num_epochs} test_loss {test_loss:.5f}')
         tr_losses.append(tr_loss)
         test_losses.append(test_loss)
         # saving model
-        save_model(model, f'results/gated_pixel_cnn_model_epoch{epoch+1}.pt')
+        if (epoch + 1) % save_every == 0:
+            print('-- Saving Model --')
+            save_model(model, output_dir / f'{filename}_model_epoch{epoch+1}.pt')
     if num_classes is not None:
         cond = torch.arange(num_classes).unsqueeze(1).repeat(1, 100 // num_classes).view(-1).long()
         one_hot = F.one_hot(cond, num_classes).float().to(DEVICE)
@@ -58,7 +52,6 @@ def train(train_data, test_data, tr_params, model_params, data_shape, output_dir
         samples = model.sample(100, visible=tr_params['visible'])
 
     samples = samples / (num_colors - 1)
-    # samples = (torch.FloatTensor(samples)).permute(0, 3, 1, 2)
     save_training_plot(tr_losses, test_losses, None,
                        output_dir / f'{filename}_train_plot.png')
     # save model # save samples
@@ -85,6 +78,8 @@ if __name__ == '__main__':
                         default=1)
     parser.add_argument('-bz', '--batch_size', type=int, help='training and test batch sizez',
                         default=128)
+    parser.add_argument('--num_samples', type=int, help='num_samples',
+                        default=None)
     args = parser.parse_args()
     print('-- Entered Arguments --')
     for arg in vars(args):
@@ -95,6 +90,9 @@ if __name__ == '__main__':
         tr, te = mnist_colored['train'], mnist_colored['test']
         tr = np.transpose(tr, (0, 3, 1, 2))
         te = np.transpose(te, (0, 3, 1, 2))
+        if args.num_samples is not None:
+            tr = tr[:args.num_samples]
+            te = te[:args.num_samples]
         _, C, H, W = tr.shape
         num_colors = 4
         binarize = False
