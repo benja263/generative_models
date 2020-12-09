@@ -1,5 +1,20 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
+class CroppedConv2d(nn.Conv2d):
+    def __init__(self, *args, **kwargs):
+        super(CroppedConv2d, self).__init__(*args, **kwargs)
+
+    def forward(self, x):
+        x = super(CroppedConv2d, self).forward(x)
+
+        kernel_height, _ = self.kernel_size
+        res = x[:, :, 1:-kernel_height, :]
+        shifted_up_res = x[:, :, :-kernel_height-1, :]
+
+        return res, shifted_up_res
 
 
 class GatedMaskedConv2d(nn.Conv2d):
@@ -35,7 +50,7 @@ class GatedMaskedConv2d(nn.Conv2d):
             if dependent_colors:
                 self.dependent_color_masking(self.weight.size(), mask_type, mask_orientation)
             else:
-                self.mask[:, :, height // 2] = 1
+                self.mask[:, :, height // 2, width // 2] = 1
 
     def dependent_color_masking(self, shape, mask_type, mask_orientation):
         ch_out, ch_in, height, width = shape
@@ -102,29 +117,11 @@ class MaskedConv2D(nn.Conv2d):
 
     def forward(self, x, y=None):
         self.weight.data *= self.mask
-        out = super(MaskedConv2D, self).forward(x)
+        out = F.conv2d(x, self.weight * self.mask, self.bias, self.stride,
+                       self.padding, self.dilation, self.groups)
         if y is not None:
             out = out + self.cond_bias(y).view(y.shape[0], -1, 1, 1)
         return out
-
-
-class GatedActivation(nn.Module):
-    """Activation function which computes actiation_fn(f) * sigmoid(g).
-    The f and g correspond to the top 1/2 and bottom 1/2 of the input channels.
-    """
-
-    def __init__(self):
-        """Initializes a new GatedActivation instance.
-        Args:
-            activation_fn: Activation to use for the top 1/2 input channels.
-        """
-        super(GatedActivation, self).__init__()
-
-    def forward(self, x):
-        _, c, _, _ = x.shape
-        assert c % 2 == 0, "x must have an even number of channels."
-        left_x, right_x = x.chunk(2, dim=1)
-        return torch.tanh(left_x) * torch.sigmoid(right_x)
 
 
 class LayerNorm(nn.LayerNorm):
@@ -145,11 +142,14 @@ class LayerNorm(nn.LayerNorm):
 
 class StackLayerNorm(nn.Module):
   def __init__(self, n_filters, dependent_colors=False):
-    super(StackLayerNorm, self).__init__()
-    self.h_layer_norm = LayerNorm(n_filters, dependent_colors)
-    self.v_layer_norm = LayerNorm(n_filters, dependent_colors)
+      super(StackLayerNorm, self).__init__()
+      self.h_layer_norm = LayerNorm(n_filters, dependent_colors)
+      self.v_layer_norm = LayerNorm(n_filters, dependent_colors)
 
-  def forward(self, vertical, horizontal):
-    return self.v_layer_norm(vertical), self.h_layer_norm(horizontal)
+  def forward(self, x):
+      v_x, h_x = x.chunk(2, dim=1)
+      v_x, h_x = self.v_layer_norm(v_x), self.h_layer_norm(h_x)
+      return torch.cat((v_x, h_x), dim=1)
+
 
 

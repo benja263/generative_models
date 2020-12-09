@@ -7,7 +7,7 @@ from utils import DEVICE
 
 
 def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None, scheduler=None,
-                visible=None, binarize=True):
+                visible=None, binarize=True, visualize=False):
     """
     Train model for 1 epoch and return dictionary with the average training metric values
     :param scheduler:
@@ -27,9 +27,15 @@ def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None
         x, y = process_data(batch, num_classes, binarize)
         batch_size = x.shape[0]
         if num_classes:
-            batch_loss = model.loss(x, y)
+            if batch_idx == len(data_loader) - 1:
+                batch_loss = model.loss(x, y, True)
+            else:
+                batch_loss = model.loss(x, y)
         else:
-            batch_loss = model.loss(x)
+            if batch_idx == len(data_loader) - 1:
+                batch_loss = model.loss(x, None, True)
+            else:
+                batch_loss = model.loss(x)
         optimizer.zero_grad()
         batch_loss.backward()
         if grad_clip:
@@ -46,7 +52,7 @@ def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None
     return np.mean(batch_losses)
 
 
-def evaluate(model, data_loader, num_classes=None, binarize=True):
+def evaluate(model, data_loader, num_classes=None, binarize=True, visualize=False):
     """
 
     :param model:
@@ -56,13 +62,19 @@ def evaluate(model, data_loader, num_classes=None, binarize=True):
     model.eval()
     total_loss = 0
     with torch.no_grad():
-        for batch in data_loader:
+        for batch_idx, batch in enumerate(data_loader):
             x, y = process_data(batch, num_classes, binarize)
             batch_size = x.shape[0]
             if num_classes:
-                batch_loss = model.loss(x, y)
+                if batch_idx == len(data_loader) - 1:
+                    batch_loss = model.loss(x, y, True)
+                else:
+                    batch_loss = model.loss(x, y)
             else:
-                batch_loss = model.loss(x)
+                if batch_idx == len(data_loader) - 1:
+                    batch_loss = model.loss(x, None, True)
+                else:
+                    batch_loss = model.loss(x)
             total_loss += batch_loss * batch_size
     return total_loss.item() / len(data_loader)
 
