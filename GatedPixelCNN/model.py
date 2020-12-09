@@ -11,8 +11,8 @@ from utils import DEVICE
 
 
 class GatedBlock(nn.Module):
-    def __init__(self, mask_type, in_channels, out_channels, kernel_size, stride=1,
-                 color_conditioning=False, num_classes=None):
+    def __init__(self, mask_type, in_channels, out_channels, kernel_size, stride=1, num_classes=None,
+                 color_conditioning=False):
         super(GatedBlock, self).__init__()
         assert mask_type in ['A', 'B']
         padding = (kernel_size - stride) // 2  # stride = 1
@@ -30,9 +30,9 @@ class GatedBlock(nn.Module):
         if num_classes is not None:
             self.label_bias_v = nn.Linear(num_classes, 2 * out_channels)
             self.label_bias_h = nn.Linear(num_classes, 2 * out_channels)
-        self.create_masks((in_channels, out_channels, kernel_size))
+        self.create_masks((in_channels, out_channels, kernel_size), color_conditioning)
 
-    def create_masks(self, shape):
+    def create_masks(self, shape, color_conditioning):
         ch_out, ch_in, kernel_size = shape
         self.register_buffer('v_mask', self.v_conv.weight.data.clone())
         self.register_buffer('h_mask', self.h_conv.weight.data.clone())
@@ -42,6 +42,11 @@ class GatedBlock(nn.Module):
 
         self.v_mask[:, :, kernel_size // 2 + 1:, :] = 0
         self.h_mask[:, :, :, kernel_size // 2 + 1:] = 0
+        if color_conditioning:
+            one_third_in, one_third_out = ch_in // 3, ch_out // 3
+            self.v_mask[:one_third_out, :one_third_in, kernel_size // 2] = 1
+            self.v_mask[one_third_out:2 * one_third_out, :2 * one_third_in, kernel_size // 2] = 1
+            self.v_mask[2 * one_third_out:, :, kernel_size // 2] = 1
 
     def forward(self, x, y=None):
         # split input to horizontal and vertical stacks
@@ -99,9 +104,9 @@ class GatedPixelCNN(nn.Module):
 
         self.gated_blocks = nn.ModuleList()
         for _ in range(num_layers):
-            self.gated_blocks.extend([nn.ReLU(), GatedBlock('B', in_channels=num_h_filters,
-                                                            out_channels=num_h_filters,
-                                                            kernel_size=7, **kwargs),
+            self.gated_blocks.extend([GatedBlock('B', in_channels=num_h_filters,
+                                                 out_channels=num_h_filters,
+                                                 kernel_size=7, **kwargs),
                                       GatedBlockLayerNorm(num_h_filters, color_conditioning)])
         self.output = nn.Sequential(nn.ReLU(),
                                     MaskedConv2D(mask_type='B',
@@ -158,6 +163,7 @@ class GatedPixelCNN(nn.Module):
                             samples[:, channel, row, col] = sample
                             if prog is not None:
                                 prog.update()
+
             prog = tqdm(total=H * W * C, desc='Sample') if visible else None
             _sample(prog)
         return samples.cpu()

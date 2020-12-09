@@ -104,6 +104,9 @@ if __name__ == '__main__':
         num_colors = 2
         binarize = True
         filename = 'mnist_label_cond_gatedpixelcnn' if args.label_conditioning else 'mnist_gatedpixelcnn'
+        if args.num_samples is not None:
+            tr = data.Subset(tr, list(range(args.num_samples)))
+            te = data.Subset(te, list(range(args.num_samples)))
     # number of label classes
     num_classes = 10 if args.label_conditioning and not args.color_conditioning else None
     model_params = {'num_layers': args.num_layers, 'num_h_filters': args.num_h_filters,

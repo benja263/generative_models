@@ -109,9 +109,9 @@ class GatedBlockLayerNorm(nn.Module):
         :param bool color_conditioning: are color channels dependent
         """
         super(GatedBlockLayerNorm, self).__init__()
-        h_filters = n_filters // 3 if color_conditioning else n_filters
-        self.h_layer_norm = LayerNorm(h_filters, color_conditioning)
-        self.v_layer_norm = LayerNorm(n_filters, False)
+        n_filters = n_filters // 3 if color_conditioning else n_filters
+        self.h_layer_norm = LayerNorm(n_filters, color_conditioning)
+        self.v_layer_norm = LayerNorm(n_filters, color_conditioning)
 
     def forward(self, x):
         v_x, h_x = x.chunk(2, dim=1)
