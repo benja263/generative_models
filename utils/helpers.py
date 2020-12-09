@@ -42,24 +42,32 @@ def load_pickle(filename):
     return data
 
 
-def save_training_plot(train_losses, test_losses, title, fname):
+def save_training_plot(train_losses, test_losses, title, filename):
+    """
+
+    :param train_losses:
+    :param test_losses:
+    :param title:
+    :param fname:
+    :return:
+    """
     plt.figure()
-    n_epochs = len(test_losses) - 1
+    n_epochs = len(test_losses)
     x_train = np.linspace(0, n_epochs, len(train_losses))
-    x_test = np.arange(n_epochs + 1)
+    x_test = np.arange(n_epochs)
 
     plt.plot(x_train, train_losses, label='train loss')
     plt.plot(x_test, test_losses, label='test loss')
     plt.legend()
     plt.title(title)
     plt.xlabel('Epoch')
-    plt.ylabel('NLL')
-    savefig(fname)
+    plt.ylabel('Negative Log Likelihood')
+    savefig(filename)
     plt.close()
 
 
-def show_samples(samples, fname=None, nrow=10, title='Samples'):
-    samples = (torch.FloatTensor(samples) / 255.0).permute(0, 3, 1, 2)
+def save_samples_plot(samples, fname=None, nrow=10, title='Samples'):
+    """"""
     grid_img = make_grid(samples, nrow=nrow)
     plt.figure()
     plt.title(title)

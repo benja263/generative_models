@@ -6,10 +6,11 @@ from tqdm import tqdm
 from utils import DEVICE
 
 
-def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None, scheduler=None,
-                visible=None, binarize=True, visualize=False):
+def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None,
+                scheduler=None, visible=None, binarize=True):
     """
     Train model for 1 epoch and return dictionary with the average training metric values
+    :param num_classes:
     :param scheduler:
     :param binarize:
     :param visible:
@@ -27,15 +28,9 @@ def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None
         x, y = process_data(batch, num_classes, binarize)
         batch_size = x.shape[0]
         if num_classes:
-            if batch_idx == len(data_loader) - 1:
-                batch_loss = model.loss(x, y, True)
-            else:
-                batch_loss = model.loss(x, y)
+            batch_loss = model.loss(x, y)
         else:
-            if batch_idx == len(data_loader) - 1:
-                batch_loss = model.loss(x, None, True)
-            else:
-                batch_loss = model.loss(x)
+            batch_loss = model.loss(x)
         optimizer.zero_grad()
         batch_loss.backward()
         if grad_clip:
@@ -52,40 +47,44 @@ def train_epoch(model, data_loader, optimizer, num_classes=False, grad_clip=None
     return np.mean(batch_losses)
 
 
-def evaluate(model, data_loader, num_classes=None, binarize=True, visualize=False):
+def evaluate(model, data_loader, num_classes=None, binarize=True):
     """
 
+    :param binarize:
+    :param num_classes:
     :param model:
     :param data_loader:
     :return:
     """
     model.eval()
-    total_loss = 0
+    total_loss = 0.0
     with torch.no_grad():
         for batch_idx, batch in enumerate(data_loader):
             x, y = process_data(batch, num_classes, binarize)
             batch_size = x.shape[0]
             if num_classes:
-                if batch_idx == len(data_loader) - 1:
-                    batch_loss = model.loss(x, y, True)
-                else:
-                    batch_loss = model.loss(x, y)
+                batch_loss = model.loss(x, y)
             else:
-                if batch_idx == len(data_loader) - 1:
-                    batch_loss = model.loss(x, None, True)
-                else:
-                    batch_loss = model.loss(x)
+                batch_loss = model.loss(x)
             total_loss += batch_loss * batch_size
     return total_loss.item() / len(data_loader)
 
 
 def process_data(batch, num_classes, binarize):
+    """
+
+    :param batch:
+    :param num_classes:
+    :param binarize:
+    :return:
+    """
     if not isinstance(batch, list):
-        return batch.to(DEVICE), None
-    x, y = batch
+        x, y = batch, None
+    else:
+        x, y = batch
     if binarize:
         x = (x > 0.5).byte()
-    if num_classes:
+    if y is not None:
         y = F.one_hot(y, num_classes).float()
         return x.to(DEVICE), y.to(DEVICE)
-    return x.to(DEVICE), None
+    return x.to(DEVICE), y
