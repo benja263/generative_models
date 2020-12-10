@@ -12,10 +12,12 @@ The GatedPixelCNN [2] removes the blind spot, replaces the relu activation unit 
 A detailed explanation can be found in [Sergei Turukin's blog](https://sergeiturukin.com/2017/02/24/gated-pixelcnn.html).
 
 ## Results
+All models were trained with  10 - 15 epochs on a single GPU, with a learning rate of 1e-3, 6 gated blocks.  
+Hyperparameter search was not done
 ### Binary MNIST with class label conditioning
 ![MNIST class label conditioning](../results/mnist_label_cond_gatedpixelcnn_samples.png)
 ### Colored MNIST - color values in [0, 3]
-![MNIST color conditioning](../results/mnist_colored_gatedpixel_cnn_samples.png)
+![MNIST color conditioning](../results/mnist_colored_cond_gatedpixelcnn_samples.png)
 
 
 ## References
