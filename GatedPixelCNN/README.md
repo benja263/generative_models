@@ -4,11 +4,11 @@ Python implementation of the GatedPixelCNN model in pytorch. This implementation
 ## Architecture
 The Pixel CNN [1] is an autoregressive model that generates pixels sequentially in a raster scan order such that each pixel
 is dependent on the previously generated pixels. This is achieved via masked convolutions, in which the convolutional weights are multiplied with a binary mask such that each pixel can only receive information from the previously generated pixels. In mask A, the current pixel is not seen, while it is seen in mask B.
-![Masked convulution](pixelcnn_mask.png)
+![Masked convulution](../images/pixelcnn_mask.png)
 The Pixel CNN model suffers from a blind spot  
-![blind spot](gated_pixelcnn.jpg)  
+![blind spot](../images/gated_pixelcnn.jpg)  
 The GatedPixelCNN [2] removes the blind spot, replaces the relu activation unit with gated blocks, and adds conditioning on class labels adding information of what is supposed to in the image.
-![gated block](gated_block.jpg)
+![gated block](../images/gated_block.jpg)
 A detailed explanation can be found in [Sergei Turukin's blog](https://sergeiturukin.com/2017/02/24/gated-pixelcnn.html).
 
 ## Results
