@@ -20,13 +20,15 @@ class GatedBlock(nn.Module):
         self.v_conv = CroppedConv2d(in_channels=in_channels, out_channels=2 * out_channels,
                                     kernel_size=(kernel_size // 2 + 1, kernel_size),
                                     padding=(padding + 1, padding), bias=False)
-        self.v_to_h = nn.Conv2d(in_channels=2 * out_channels, out_channels=2 * out_channels, kernel_size=1, bias=False)
+        self.v_to_h = MaskedConv2D(mask_type='B', in_channels=2 * out_channels, out_channels=2 * out_channels,
+                                   kernel_size=1, color_conditioning=color_conditioning)
 
-        self.h_conv = MaskedConv2D(mask_type='B', in_channels=in_channels, out_channels=2 * out_channels,
-                                   kernel_size=(1, kernel_size), padding=(0, padding), stride=stride,
-                                   color_conditioning=color_conditioning)
-        self.res_conv = nn.Conv2d(out_channels, out_channels, kernel_size=1, bias=False)
-        self.skip_conv = nn.Conv2d(out_channels, out_channels, kernel_size=1, bias=False)
+        self.h_conv = nn.Conv2d(in_channels=in_channels, out_channels=2 * out_channels,
+                                kernel_size=(1, kernel_size), padding=(0, padding), stride=stride)
+        self.res_conv = MaskedConv2D(mask_type='B', in_channels=out_channels, out_channels=out_channels, kernel_size=1,
+                                     color_conditioning=color_conditioning)
+        self.skip_conv = MaskedConv2D(mask_type='B', in_channels=out_channels, out_channels=out_channels,
+                                      kernel_size=1, color_conditioning=color_conditioning)
         if num_classes is not None:
             self.label_bias_v = nn.Linear(num_classes, 2 * out_channels)
             self.label_bias_h = nn.Linear(num_classes, 2 * out_channels)
@@ -34,25 +36,25 @@ class GatedBlock(nn.Module):
 
     def create_masks(self, shape, color_conditioning):
         ch_out, ch_in, kernel_size = shape
-        self.register_buffer('v_mask', self.v_conv.weight.data.clone())
+        # self.register_buffer('v_mask', self.v_conv.weight.data.clone())
         self.register_buffer('h_mask', self.h_conv.weight.data.clone())
 
-        self.v_mask.fill_(1)
         self.h_mask.fill_(1)
 
-        self.v_mask[:, :, kernel_size // 2 + 1:, :] = 0
-        self.h_mask[:, :, :, kernel_size // 2 + 1:] = 0
+        self.h_mask[:, :, :, kernel_size // 2:] = 0
         if color_conditioning:
+            assert ch_out % 3 == 0 and ch_in % 3 == 0
             one_third_in, one_third_out = ch_in // 3, ch_out // 3
-            self.v_mask[:one_third_out, :one_third_in, kernel_size // 2] = 1
-            self.v_mask[one_third_out:2 * one_third_out, :2 * one_third_in, kernel_size // 2] = 1
-            self.v_mask[2 * one_third_out:, :, kernel_size // 2] = 1
+            self.h_mask[:one_third_out, :one_third_in, :, kernel_size // 2] = 1
+            self.h_mask[one_third_out:2 * one_third_out, :2 * one_third_in, :, kernel_size // 2] = 1
+            self.h_mask[2 * one_third_out:, :, :, kernel_size // 2] = 1
+        else:
+            self.h_mask[:, :, :, kernel_size // 2] = 1
 
     def forward(self, x, y=None):
         # split input to horizontal and vertical stacks
         x_v, x_h = x.chunk(2, dim=1)
         # mask input to both stacks
-        self.v_conv.weight.data *= self.v_mask
         self.h_conv.weight.data *= self.h_mask
         # cropped convolution for vertical stack such that vertical stack can see current row
         # and send shifted version to horizontal
@@ -99,8 +101,8 @@ class GatedPixelCNN(nn.Module):
         self.num_colors = num_colors
 
         self.causal = MaskedConv2D(mask_type='A', in_channels=C,
-                                   out_channels=num_h_filters, kernel_size=7,
-                                   padding=3, **kwargs)
+                                   out_channels=num_h_filters, kernel_size=7, padding=3)
+                                   #, **kwargs)
 
         self.gated_blocks = nn.ModuleList()
         for _ in range(num_layers):
@@ -164,6 +166,6 @@ class GatedPixelCNN(nn.Module):
                             if prog is not None:
                                 prog.update()
 
-            prog = tqdm(total=H * W * C, desc='Sample') if visible else None
+            prog = tqdm(total=H*W*C, desc='Sample') if visible else None
             _sample(prog)
         return samples.cpu()
