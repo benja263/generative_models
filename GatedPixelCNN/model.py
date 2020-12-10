@@ -36,7 +36,6 @@ class GatedBlock(nn.Module):
 
     def create_masks(self, shape, color_conditioning):
         ch_out, ch_in, kernel_size = shape
-        # self.register_buffer('v_mask', self.v_conv.weight.data.clone())
         self.register_buffer('h_mask', self.h_conv.weight.data.clone())
 
         self.h_mask.fill_(1)
@@ -101,8 +100,7 @@ class GatedPixelCNN(nn.Module):
         self.num_colors = num_colors
 
         self.causal = MaskedConv2D(mask_type='A', in_channels=C,
-                                   out_channels=num_h_filters, kernel_size=7, padding=3)
-                                   #, **kwargs)
+                                   out_channels=num_h_filters, kernel_size=7, padding=3, num_classes=num_classes)
 
         self.gated_blocks = nn.ModuleList()
         for _ in range(num_layers):
