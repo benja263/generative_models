@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Uniform
 
-from MADE.layers import MaskedLinear
+from AutoRegressive.MADE.layers import MaskedLinear
 from utils import DEVICE
 from tqdm import tqdm
 

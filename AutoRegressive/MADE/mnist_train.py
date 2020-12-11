@@ -4,15 +4,14 @@ Script for training a MADE model on the MNIST dataset
 import argparse
 from pathlib import Path
 
-import numpy as np
 import torch.utils.data as data
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.optim import AdamW
 
-from MADE.model import MADE
+from AutoRegressive.MADE import MADE
 from utils.helpers import save_training_plot, save_samples_plot, save_model
-from utils.train import train_epoch, evaluate, DEVICE
+from AutoRegressive.utils.train import train_epoch, evaluate, DEVICE
 
 
 def train(train_data, test_data, tr_params, model_params, image_shape, output_dir, filename):

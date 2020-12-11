@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from GatedPixelCNN.layers import CroppedConv2d, GatedBlockLayerNorm, MaskedConv2D
+from AutoRegressive.GatedPixelCNN.layers import CroppedConv2d, GatedBlockLayerNorm, MaskedConv2D
 from utils import DEVICE
 
 

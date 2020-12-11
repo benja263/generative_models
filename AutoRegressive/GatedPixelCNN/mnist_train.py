@@ -12,9 +12,9 @@ import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.optim import Adam, lr_scheduler
 
-from GatedPixelCNN.model import GatedPixelCNN
+from AutoRegressive.GatedPixelCNN.model import GatedPixelCNN
 from utils.helpers import load_pickle, save_model, save_training_plot, save_samples_plot
-from utils.train import train_epoch, evaluate, DEVICE
+from AutoRegressive.utils.train import train_epoch, evaluate, DEVICE
 
 
 def train(train_data, test_data, tr_params, model_params, data_shape, output_dir, filename):
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         print(f'- {arg}: {getattr(args, arg)}')
 
     if args.color_conditioning:
-        mnist_colored = load_pickle('../data/mnist_colored.pkl')
+        mnist_colored = load_pickle('../../data/mnist_colored.pkl')
         tr, te = mnist_colored['train'], mnist_colored['test']
         tr = np.transpose(tr, (0, 3, 1, 2))
         te = np.transpose(te, (0, 3, 1, 2))
