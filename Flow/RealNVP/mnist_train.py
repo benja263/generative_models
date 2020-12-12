@@ -73,6 +73,10 @@ if __name__ == '__main__':
                         default=64)
     parser.add_argument('--num_samples', type=int, help='num_samples',
                         default=None)
+    parser.add_argument('--num_res_blocks', type=int, help='number of resnet blocks for scale parameter in checker board transform',
+                        default=4)
+    parser.add_argument('--num_scales', type=int, help='number of scales',
+                        default=2)
     args = parser.parse_args()
     print('-- Entered Arguments --')
     for arg in vars(args):
@@ -102,7 +106,7 @@ if __name__ == '__main__':
             te = data.Subset(te, list(range(args.num_samples)))
     # number of label classes
     num_classes = 10 if args.label_conditioning and not args.color_conditioning else None
-    model_params = {'num_colors': num_colors}
+    model_params = {'num_colors': num_colors, 'n_res_blocks': args.num_res_blocks, 'num_scales': args.num_scales}
     tr_params = {'num_epochs': args.num_epochs, 'lr': args.learning_rate,
                  'grad_clip': args.grad_clip, 'visible': args.visible,
                  'binarize': binarize, 'save_every': args.save_every,
