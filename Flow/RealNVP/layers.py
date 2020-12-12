@@ -21,10 +21,13 @@ class ResnetBlock(nn.Module):
         super(ResnetBlock, self).__init__()
         self.block = nn.Sequential(
             WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0),
+            nn.BatchNorm2d(n_filters),
             nn.ReLU(),
             WeightNormConv2d(n_filters, n_filters, kernel_size=3, padding=1),
+            nn.BatchNorm2d(n_filters),
             nn.ReLU(),
-            WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0)
+            WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0),
+            nn.BatchNorm2d(n_filters),
         )
 
     def forward(self, x):
@@ -32,7 +35,7 @@ class ResnetBlock(nn.Module):
 
 
 class SimpleResnet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=6, n_filters=128, n_blocks=8):
+    def __init__(self, in_channels=3, out_channels=6, n_filters=128, n_blocks=4):
         """
         Resnet outputing s and t as deep convolutional neural networks
         :param in_channels:
@@ -54,13 +57,14 @@ class SimpleResnet(nn.Module):
 
 
 class AffineCheckerboardTransform(nn.Module):
-    def __init__(self, image_shape, pattern='even'):
+    def __init__(self, input_shape, pattern='even', n_res_blocks=6):
         super(AffineCheckerboardTransform, self).__init__()
         assert pattern in ['even', 'odd']
-        self.mask = self.build_mask(pattern, image_shape)
+        C, H, W = input_shape
+        self.mask = self.build_mask(pattern, (H, W))
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
-        self.resnet = SimpleResnet(in_channels=3, out_channels=6)
+        self.resnet = SimpleResnet(in_channels=C, out_channels=2*C, n_blocks=n_res_blocks)
 
     def build_mask(self, pattern, image_shape):
         # if type == 1.0, the top left corner will be 1.0
@@ -93,20 +97,21 @@ class AffineCheckerboardTransform(nn.Module):
 
 
 class AffineChannelTransform(nn.Module):
-    def __init__(self, modify_top):
+    def __init__(self, num_channels, modify_top, n_res_blocks):
         super(AffineChannelTransform, self).__init__()
+        self.num_channels = num_channels
         self.modify_top = modify_top
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
-        self.resnet = SimpleResnet(in_channels=6, out_channels=12)
+        self.resnet = SimpleResnet(in_channels=2*num_channels, out_channels=4*num_channels,  n_blocks=n_res_blocks)
 
     def forward(self, x, reverse=False):
-        n_channels = x.shape[1]
+        num_channels = x.shape[1]
         if self.modify_top:
-            on, off = x.split(n_channels // 2, dim=1)
+            on, off = x.split(num_channels // 2, dim=1)
         else:
-            off, on = x.split(n_channels // 2, dim=1)
-        log_s, t = self.resnet(off).split(n_channels // 2, dim=1)
+            off, on = x.split(num_channels // 2, dim=1)
+        log_s, t = self.resnet(off).split(num_channels // 2, dim=1)
         log_s = self.scale * torch.tanh(log_s) + self.scale_shift
 
         if reverse:  # inverting the transformation
@@ -118,57 +123,3 @@ class AffineChannelTransform(nn.Module):
             return torch.cat([on, off], dim=1), torch.cat([log_s, torch.zeros_like(log_s)], dim=1)
         else:
             return torch.cat([off, on], dim=1), torch.cat([torch.zeros_like(log_s), log_s], dim=1)
-
-
-class BatchNormFlow(nn.Module):
-    """ An implementation of a batch normalization layer from
-    Density estimation using Real NVP
-    (https://arxiv.org/abs/1605.08803).
-    """
-
-    def __init__(self, num_inputs, momentum=0.0, eps=1e-5):
-        super(BatchNormFlow, self).__init__()
-
-        self.log_gamma = nn.Parameter(torch.zeros(num_inputs))
-        self.beta = nn.Parameter(torch.zeros(num_inputs))
-        self.momentum = momentum
-        self.eps = eps
-
-        self.register_buffer('running_mean', torch.zeros(num_inputs))
-        self.register_buffer('running_var', torch.ones(num_inputs))
-
-    def forward(self, inputs, cond_inputs=None, mode='direct'):
-        if mode == 'direct':
-            if self.training:
-                self.batch_mean = inputs.mean(0)
-                self.batch_var = (inputs - self.batch_mean).pow(2).mean(0) + self.eps
-                self.running_mean.mul_(self.momentum)
-                self.running_var.mul_(self.momentum)
-
-                self.running_mean.add_(self.batch_mean.data *
-                                       (1 - self.momentum))
-                self.running_var.add_(self.batch_var.data *
-                                      (1 - self.momentum))
-
-                mean = self.batch_mean
-                var = self.batch_var
-            else:
-                mean = self.running_mean
-                var = self.running_var
-
-            x_hat = (inputs - mean) / var.sqrt()
-            y = torch.exp(self.log_gamma) * x_hat + self.beta
-            return y, (self.log_gamma - 0.5 * torch.log(var)).sum(-1, keepdim=True)
-        else:
-            if self.training:
-                mean = self.batch_mean
-                var = self.batch_var
-            else:
-                mean = self.running_mean
-                var = self.running_var
-
-            x_hat = (inputs - self.beta) / torch.exp(self.log_gamma)
-
-            y = x_hat * var.sqrt() + mean
-
-            return y, (-self.log_gamma + 0.5 * torch.log(var)).sum(-1, keepdim=True)

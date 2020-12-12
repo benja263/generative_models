@@ -1,42 +1,37 @@
 import torch
 import torch.nn as nn
 
-from Flow.RealNVP.layers import AffineCheckerboardTransform, AffineChannelTransform, BatchNormFlow
+from Flow.RealNVP.layers import AffineCheckerboardTransform, AffineChannelTransform
 from utils import DEVICE
 
 
 class RealNVP(nn.Module):
-    def __init__(self, image_shape, num_colors):
+    """ https://github.com/taesungp/"""
+    def __init__(self, image_shape, num_colors, n_res_blocks=6):
         super(RealNVP, self).__init__()
+        C, H, W = image_shape
         self.image_shape = image_shape
         self.num_colors = num_colors
 
         self.prior = torch.distributions.Normal(torch.tensor(0.).to(DEVICE), torch.tensor(1.).to(DEVICE))
-        # self.prior = torch.distributions.Normal(torch.tensor(0.).to(device), torch.tensor(1.).to(device))
+
         self.checker_transforms1 = nn.ModuleList([
-            AffineCheckerboardTransform(1.0),
-            BatchNormFlow(3),
-            AffineCheckerboardTransform(0.0),
-            BatchNormFlow(3),
-            AffineCheckerboardTransform(1.0),
+            AffineCheckerboardTransform(image_shape, 'even', n_res_blocks),
+            AffineCheckerboardTransform(image_shape, 'odd', n_res_blocks),
+            AffineCheckerboardTransform(image_shape, 'even', n_res_blocks),
         ])
 
         self.channel_transforms = nn.ModuleList([
-            AffineChannelTransform(True),
-            BatchNormFlow(12),
-            AffineChannelTransform(False),
-            BatchNormFlow(12),
-            AffineChannelTransform(True),
+            AffineChannelTransform(C, True, n_res_blocks),
+            AffineChannelTransform(C, False, n_res_blocks),
+            AffineChannelTransform(C, True, n_res_blocks),
         ])
 
         self.checker_transforms2 = nn.ModuleList([
-            AffineCheckerboardTransform(1.0),
-            BatchNormFlow(3),
-            AffineCheckerboardTransform(0.0),
-            BatchNormFlow(3),
-            AffineCheckerboardTransform(1.0),
-            BatchNormFlow(3),
-            AffineCheckerboardTransform(0.0)
+            AffineCheckerboardTransform(image_shape, 'even', n_res_blocks),
+            AffineCheckerboardTransform(image_shape, 'odd', n_res_blocks),
+            AffineCheckerboardTransform(image_shape, 'even', n_res_blocks),
+            AffineCheckerboardTransform(image_shape, 'odd', n_res_blocks)
         ])
 
     def squeeze(self, x):
@@ -59,29 +54,47 @@ class RealNVP(nn.Module):
         # z -> x (inverse of f)
         x = z
         for op in reversed(self.checker_transforms2):
-            x, _ = op.forward(x, reverse=True)
+            if isinstance(op, AffineCheckerboardTransform):
+                x, _ = op.forward(x, reverse=True)
+            else:
+                x = op.forward(x)
         x = self.squeeze(x)
         for op in reversed(self.channel_transforms):
-            x, _ = op.forward(x, reverse=True)
+            if isinstance(op, AffineChannelTransform):
+                x, _ = op.forward(x, reverse=True)
+            else:
+                x = op.forward(x)
         x = self.undo_squeeze(x)
         for op in reversed(self.checker_transforms1):
-            x, _ = op.forward(x, reverse=True)
+            if isinstance(op, AffineCheckerboardTransform):
+                x, _ = op.forward(x, reverse=True)
+            else:
+                x = op.forward(x)
         return x
 
     def f(self, x):
         # maps x -> z, and returns the log determinant (not reduced)
         z, log_det = x, torch.zeros_like(x)
         for op in self.checker_transforms1:
-            z, delta_log_det = op.forward(z)
-            log_det += delta_log_det
+            if isinstance(op, AffineCheckerboardTransform):
+                z, delta_log_det = op.forward(z)
+                log_det += delta_log_det
+            else:
+                z = op.forward(z)
         z, log_det = self.squeeze(z), self.squeeze(log_det)
         for op in self.channel_transforms:
-            z, delta_log_det = op.forward(z)
-            log_det += delta_log_det
+            if isinstance(op, AffineChannelTransform):
+                z, delta_log_det = op.forward(z)
+                log_det += delta_log_det
+            else:
+                z = op.forward(z)
         z, log_det = self.undo_squeeze(z), self.undo_squeeze(log_det)
         for op in self.checker_transforms2:
-            z, delta_log_det = op.forward(z)
-            log_det += delta_log_det
+            if isinstance(op, AffineCheckerboardTransform):
+                z, delta_log_det = op.forward(z)
+                log_det += delta_log_det
+            else:
+                z = op.forward(z)
         return z, log_det
 
     def log_prob(self, x):
@@ -89,6 +102,7 @@ class RealNVP(nn.Module):
         return torch.sum(log_det, [1, 2, 3]) + torch.sum(self.prior.log_prob(z), [1, 2, 3])
 
     def sample(self, num_samples):
-        C, H, W = self.image_shape
-        z = self.prior.sample([num_samples, C, H, W])
-        return self.g(z)
+        with torch.no_grad():
+            C, H, W = self.image_shape
+            z = self.prior.sample([num_samples, C, H, W])
+            return self.g(z).cpu()
