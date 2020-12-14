@@ -3,6 +3,7 @@ Script for training a RealNVP model on the MNIST dataset
 """
 import argparse
 from pathlib import Path
+import os
 
 import numpy as np
 import torch.utils.data as data
@@ -63,6 +64,10 @@ def train(train_data, test_data, tr_params, model_params, output_dir, filename, 
                      'optimizer_state_dict': optimizer.state_dict(),
                      'tr_losses': tr_losses,
                      'te_losses': test_losses}
+            print('-- Sampling --')
+            raw_samples = model.sample(100)
+            samples = pre_process(raw_samples, reverse=True)
+            save_samples_plot(samples, output_dir / f'{filename}_epoch_{epoch+1}_samples.png')
             save_model_state(state, output_dir / f'{filename}_model_epoch{epoch + 1}.pt')
     print('-- Sampling --')
     raw_samples = model.sample(100)
@@ -91,7 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--binarize', action='store_true', help='Binarize grayscale mnist -- not relevant for rgb mnist')
     parser.add_argument('-c', '--color_conditioning', action='store_true', help='Dependent color channels')
     parser.add_argument('-v', '--visible', action='store_true', help='Use visible sampling progress bar')
-    parser.add_argument('-o', '--output_dir', type=Path, help='Output directory', default='results')
+    parser.add_argument('-o', '--output_dir', type=Path, help='Output directory', default='results/glow')
     parser.add_argument('-s', '--save_every', type=int, help='Number of iterations between model saving every',
                         default=1)
     parser.add_argument('-bz', '--batch_size', type=int, help='training and test batch sizes',
@@ -154,5 +159,8 @@ if __name__ == '__main__':
 
     if args.load_model:
         print('-- Loaded pre-trained model --')
+
+    if not args.output_dir.exists():
+        args.output_dir.mkdir(parents=True)
     train(tr, te, tr_params, model_params, args.output_dir, filename,
           pre_trained_path=args.model_dir / args.filename if args.load_model else None)

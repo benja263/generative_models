@@ -22,8 +22,11 @@ class ActNorm(nn.Module):
         else:
             if not self.initialized:
                 self.center.data = -torch.mean(x, dim=[0, 2, 3], keepdim=True)
-                scale = torch.std(x, dim=[0, 2, 3])
-                self.log_scale.data = - torch.log(scale.reshape(1, self.num_channels, 1, 1))
+                # scale = torch.std(x, dim=[0, 2, 3])
+                # self.log_scale.data = - torch.log(scale.reshape(1, self.num_channels, 1, 1))
+                self.log_scale.data = - torch.log(
+                    torch.std(x.permute(1, 0, 2, 3).reshape(self.num_channels, -1), dim=1).reshape(1, self.num_channels, 1,
+                                                                                                 1))
                 self.initialized = True
             return x * torch.exp(self.log_scale) + self.center, self.log_scale.sum() * H * W
 
@@ -38,7 +41,7 @@ class Invertible_1x1_Conv2D(nn.Module):
         self.num_channels = num_channels
         self.weight = nn.Parameter(torch.qr(torch.randn((num_channels, num_channels)))[0], requires_grad=True)
 
-    def forward(self, z, log_det, reverse=False):
+    def forward(self, z, reverse=False):
         H, W = z.shape[2], z.shape[3]
         # Compute log determinant
         weight_log_det = H * W * torch.slogdet(self.weight).logabsdet
@@ -46,8 +49,7 @@ class Invertible_1x1_Conv2D(nn.Module):
             weight = torch.inverse(self.weight)
         else:
             weight = self.weight
-            log_det += weight_log_det
-        return F.conv2d(z, weight.view(self.num_channels, self.num_channels, 1, 1)), log_det
+        return F.conv2d(z, weight.view(self.num_channels, self.num_channels, 1, 1)), weight_log_det
 
 
 class AffineTransform(nn.Module):
@@ -55,6 +57,7 @@ class AffineTransform(nn.Module):
         super(AffineTransform, self).__init__()
         self.num_channels = num_channels
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
+        self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
 
         self.resnet = Resnet(in_channels=num_channels, out_channels=2*num_channels, num_blocks=n_res_blocks,
                              num_filters=num_filters)
@@ -64,7 +67,7 @@ class AffineTransform(nn.Module):
 
         x_a, x_b = x.split(num_channels // 2, dim=1)
         log_s, t = self.resnet(x_b).split(num_channels // 2, dim=1)
-        log_s = self.scale * torch.tanh(log_s)
+        log_s = self.scale * torch.tanh(log_s) + self.scale_shift
 
         if reverse:  # inverting the transformation
             x_a = (x_a - t) * torch.exp(-log_s)

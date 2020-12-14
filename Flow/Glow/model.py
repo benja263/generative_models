@@ -68,16 +68,10 @@ class FlowStep(nn.Module):
         if reverse:
             x = z
             for op in reversed(self.step):
-                if isinstance(op, Invertible_1x1_Conv2D):
-                    x, _ = op(x, None, reverse=True)
-                else:
-                    x, _ = op(x, reverse=True)
+                x, _ = op(x, reverse=True)
             return x
         for op in self.step:
-            if isinstance(op, Invertible_1x1_Conv2D):
-                z, delta_log_det = op(z, log_det)
-            else:
-                z, delta_log_det = op(z)
+            z, delta_log_det = op(z)
             log_det += delta_log_det
         return z, log_det
 
