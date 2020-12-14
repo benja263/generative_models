@@ -22,11 +22,8 @@ class ActNorm(nn.Module):
         else:
             if not self.initialized:
                 self.center.data = -torch.mean(x, dim=[0, 2, 3], keepdim=True)
-                # scale = torch.std(x, dim=[0, 2, 3])
-                # self.log_scale.data = - torch.log(scale.reshape(1, self.num_channels, 1, 1))
-                self.log_scale.data = - torch.log(
-                    torch.std(x.permute(1, 0, 2, 3).reshape(self.num_channels, -1), dim=1).reshape(1, self.num_channels, 1,
-                                                                                                 1))
+                scale = torch.std(x, dim=[0, 2, 3])
+                self.log_scale.data = - torch.log(scale.reshape(1, self.num_channels, 1, 1))
                 self.initialized = True
             return x * torch.exp(self.log_scale) + self.center, self.log_scale.sum() * H * W
 
