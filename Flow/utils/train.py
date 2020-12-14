@@ -74,13 +74,12 @@ def process_data(batch, num_colors, alpha, dequantize):
     :param binarize:
     :return:
     """
-    if isinstance(batch, list):
-        x = (batch[0] * (num_colors - 1)).long()
-    else:
-        x = batch
+    # if isinstance(batch, list):
+    #     x = (batch[0] * (num_colors - 1)).long()
+    # else:
     # if binarize:
     #     x = (x > 0.5).byte()
-    x = x.to(DEVICE).float()
+    x = batch.to(DEVICE).float()
     x, log_det = pre_process(x, False, dequantize, num_colors, alpha)
     return x, log_det
 

@@ -10,7 +10,7 @@ import torchvision.transforms as transforms
 from torch.optim import AdamW
 
 from AutoRegressive.MADE import MADE
-from utils.helpers import save_training_plot, save_samples_plot, save_model
+from utils.helpers import save_training_plot, save_samples_plot, save_model_state
 from AutoRegressive.utils.train import train_epoch, evaluate, DEVICE
 
 
@@ -36,7 +36,7 @@ def train(train_data, test_data, tr_params, model_params, image_shape, output_di
         # saving model
         if (epoch + 1) % save_every == 0:
             print('-- Saving Model --')
-            save_model(model, output_dir / f'{filename}_model_epoch{epoch+1}.pt')
+            save_model_state(model, output_dir / f'{filename}_model_epoch{epoch + 1}.pt')
     samples = model.sample(100, visible=tr_params['visible'])
     samples = samples / (model_params['num_classes'] - 1)
     save_training_plot(tr_losses, test_losses, None,

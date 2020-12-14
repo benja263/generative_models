@@ -7,7 +7,7 @@ import torch
 from matplotlib import pyplot as plt
 from torchvision.utils import make_grid
 
-from utils import DATA_PATH
+from utils import DATA_PATH, DEVICE
 
 
 def load_data(name):
@@ -22,12 +22,12 @@ def load_data(name):
     return data
 
 
-def save_model(model, filename):
-    torch.save(model, filename)
+def save_model_state(state, filename):
+    torch.save(state, filename)
 
 
-def load_model(filename):
-    return torch.load(filename, map_location="cpu")
+def load_model_checkpoint(filename):
+    return torch.load(filename, map_location=DEVICE)
 
 
 def save_pickle(data, filename):

@@ -13,7 +13,7 @@ import torchvision.transforms as transforms
 from torch.optim import Adam, lr_scheduler
 
 from AutoRegressive.GatedPixelCNN.model import GatedPixelCNN
-from utils.helpers import load_pickle, save_model, save_training_plot, save_samples_plot
+from utils.helpers import load_pickle, save_model_state, save_training_plot, save_samples_plot
 from AutoRegressive.utils.train import train_epoch, evaluate, DEVICE
 
 
@@ -43,7 +43,7 @@ def train(train_data, test_data, tr_params, model_params, data_shape, output_dir
         # saving model
         if (epoch + 1) % save_every == 0:
             print('-- Saving Model --')
-            save_model(model, output_dir / f'{filename}_model_epoch{epoch+1}.pt')
+            save_model_state(model, output_dir / f'{filename}_model_epoch{epoch + 1}.pt')
     if num_classes is not None:
         cond = torch.arange(num_classes).unsqueeze(1).repeat(1, 100 // num_classes).view(-1).long()
         one_hot = F.one_hot(cond, num_classes).float().to(DEVICE)
@@ -55,7 +55,7 @@ def train(train_data, test_data, tr_params, model_params, data_shape, output_dir
     save_training_plot(tr_losses, test_losses, None,
                        output_dir / f'{filename}_train_plot.png')
     # save model # save samples
-    save_model(model, output_dir / f'{filename}_model.pt')
+    save_model_state(model, output_dir / f'{filename}_model.pt')
     save_samples_plot(samples, output_dir / f'{filename}_samples.png')
 
 

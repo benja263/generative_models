@@ -1,5 +1,5 @@
 # Gated Pixel CNN
-Python implementation of the GatedPixelCNN model in pytorch. This implementation is based on [Mark Zakharov's impelemtation](https://github.com/anordertoreclaim/PixelCNN), [Homework 2 solutions in UC Berkeley's deep unsupervised class](https://sites.google.com/view/berkeley-cs294-158-sp20/home), and [Generating Intepretable Images with Controlable Structure by Reed and al., 2016](http://www.scottreed.info/files/iclr2017.pdf)
+This implementation is based on [Mark Zakharov's impelemtation](https://github.com/anordertoreclaim/PixelCNN), [Homework 2 solutions in UC Berkeley's deep unsupervised class](https://sites.google.com/view/berkeley-cs294-158-sp20/home), and [Generating Intepretable Images with Controlable Structure by Reed and al., 2016](http://www.scottreed.info/files/iclr2017.pdf)
 
 ## Architecture
 The Pixel CNN [1] is an autoregressive model that generates pixels sequentially in a raster scan order such that each pixel

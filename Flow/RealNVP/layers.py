@@ -35,21 +35,21 @@ class ResnetBlock(nn.Module):
 
 
 class SimpleResnet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=6, n_filters=128, n_blocks=4):
+    def __init__(self, in_channels=3, out_channels=6, num_filters=128, num_blocks=4):
         """
         Resnet outputing s and t as deep convolutional neural networks
         :param in_channels:
         :param out_channels:
-        :param n_filters:
-        :param n_blocks:
+        :param num_filters:
+        :param num_blocks:
         """
         super(SimpleResnet, self).__init__()
-        layers = [WeightNormConv2d(in_channels, n_filters, (3, 3), stride=1, padding=1),
+        layers = [WeightNormConv2d(in_channels, num_filters, (3, 3), stride=1, padding=1),
                   nn.ReLU()]
-        for _ in range(n_blocks):
-            layers.append(ResnetBlock(n_filters))
+        for _ in range(num_blocks):
+            layers.append(ResnetBlock(num_filters))
         layers.append(nn.ReLU())
-        layers.append(WeightNormConv2d(n_filters, out_channels, (3, 3), stride=1, padding=1))
+        layers.append(WeightNormConv2d(num_filters, out_channels, (3, 3), stride=1, padding=1))
         self.resnet = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -57,14 +57,14 @@ class SimpleResnet(nn.Module):
 
 
 class AffineCheckerboardTransform(nn.Module):
-    def __init__(self, input_shape, pattern='even', n_res_blocks=6):
+    def __init__(self, input_shape, pattern='even', n_res_blocks=6, num_filters=32):
         super(AffineCheckerboardTransform, self).__init__()
         assert pattern in ['even', 'odd']
         C, H, W = input_shape
         self.mask = self.build_mask(pattern, (H, W))
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
-        self.resnet = SimpleResnet(in_channels=C, out_channels=2*C, n_blocks=n_res_blocks)
+        self.resnet = SimpleResnet(in_channels=C, out_channels=2*C, num_blocks=n_res_blocks, num_filters=num_filters)
 
     def build_mask(self, pattern, image_shape):
         # if type == 1.0, the top left corner will be 1.0
@@ -78,11 +78,11 @@ class AffineCheckerboardTransform(nn.Module):
 
     def forward(self, x, reverse=False):
         # returns transform(x), log_det
-        batch_size, n_channels, _, _ = x.shape
+        batch_size, num_channels, _, _ = x.shape
         mask = self.mask.repeat(batch_size, 1, 1, 1)
         # section 3.4
         x_ = x * mask
-        log_s, t = self.resnet(x_).split(n_channels, dim=1)
+        log_s, t = self.resnet(x_).split(num_channels, dim=1)
         # section 4.1
         log_s = self.scale * torch.tanh(log_s) + self.scale_shift
         # section 3.4
@@ -93,21 +93,23 @@ class AffineCheckerboardTransform(nn.Module):
             x = (x - t) * torch.exp(-log_s)
         else:
             x = x * torch.exp(log_s) + t
-        return x, log_s
+        # reduce determinant
+        return x, log_s.view(batch_size, -1).sum(-1)
 
 
 class AffineChannelTransform(nn.Module):
-    def __init__(self, num_channels, modify_top, n_res_blocks):
+    def __init__(self, num_channels, modify_top, n_res_blocks, num_filters):
         super(AffineChannelTransform, self).__init__()
         self.num_channels = num_channels
-        self.modify_top = modify_top
+        self.top_half = modify_top
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
-        self.resnet = SimpleResnet(in_channels=2*num_channels, out_channels=4*num_channels,  n_blocks=n_res_blocks)
+        self.resnet = SimpleResnet(in_channels=2*num_channels, out_channels=4*num_channels, num_blocks=n_res_blocks,
+                                   num_filters=num_filters)
 
     def forward(self, x, reverse=False):
-        num_channels = x.shape[1]
-        if self.modify_top:
+        batch_size, num_channels, _, _ = x.shape
+        if self.top_half:
             on, off = x.split(num_channels // 2, dim=1)
         else:
             off, on = x.split(num_channels // 2, dim=1)
@@ -119,7 +121,7 @@ class AffineChannelTransform(nn.Module):
         else:
             on = on * torch.exp(log_s) + t
 
-        if self.modify_top:
-            return torch.cat([on, off], dim=1), torch.cat([log_s, torch.zeros_like(log_s)], dim=1)
+        if self.top_half:
+            return torch.cat([on, off], dim=1), log_s.view(batch_size, -1).sum(-1)
         else:
-            return torch.cat([off, on], dim=1), torch.cat([torch.zeros_like(log_s), log_s], dim=1)
+            return torch.cat([off, on], dim=1), log_s.view(batch_size, -1).sum(-1)
