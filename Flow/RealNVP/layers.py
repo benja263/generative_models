@@ -21,21 +21,18 @@ class ResnetBlock(nn.Module):
         super(ResnetBlock, self).__init__()
         self.block = nn.Sequential(
             WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0),
-            nn.BatchNorm2d(n_filters),
             nn.ReLU(),
             WeightNormConv2d(n_filters, n_filters, kernel_size=3, padding=1),
-            nn.BatchNorm2d(n_filters),
             nn.ReLU(),
             WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0),
-            nn.BatchNorm2d(n_filters),
         )
 
     def forward(self, x):
         return x + self.block(x)
 
 
-class SimpleResnet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=6, num_filters=128, num_blocks=4):
+class Resnet(nn.Module):
+    def __init__(self, in_channels, out_channels, num_filters, num_blocks):
         """
         Resnet outputing s and t as deep convolutional neural networks
         :param in_channels:
@@ -43,7 +40,7 @@ class SimpleResnet(nn.Module):
         :param num_filters:
         :param num_blocks:
         """
-        super(SimpleResnet, self).__init__()
+        super(Resnet, self).__init__()
         layers = [WeightNormConv2d(in_channels, num_filters, (3, 3), stride=1, padding=1),
                   nn.ReLU()]
         for _ in range(num_blocks):
@@ -64,7 +61,7 @@ class AffineCheckerboardTransform(nn.Module):
         self.mask = self.build_mask(pattern, (H, W))
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
-        self.resnet = SimpleResnet(in_channels=C, out_channels=2*C, num_blocks=n_res_blocks, num_filters=num_filters)
+        self.resnet = Resnet(in_channels=C, out_channels=2 * C, num_blocks=n_res_blocks, num_filters=num_filters)
 
     def build_mask(self, pattern, image_shape):
         # if type == 1.0, the top left corner will be 1.0
@@ -104,8 +101,8 @@ class AffineChannelTransform(nn.Module):
         self.top_half = modify_top
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
-        self.resnet = SimpleResnet(in_channels=2*num_channels, out_channels=4*num_channels, num_blocks=n_res_blocks,
-                                   num_filters=num_filters)
+        self.resnet = Resnet(in_channels=2 * num_channels, out_channels=4 * num_channels, num_blocks=n_res_blocks,
+                             num_filters=num_filters)
 
     def forward(self, x, reverse=False):
         batch_size, num_channels, _, _ = x.shape
