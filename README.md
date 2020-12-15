@@ -1,12 +1,11 @@
 # Generative Models
 A small collection of generative models implemented in python
 
-Generative models 
 ## Model list
 ### Autoregressive Models
 Probabilistic models that receive x as an input and output P(x). These models exploit the fact that P(x) can be expressed as the product of its
 nested conditionals.  
-<a href="https://www.codecogs.com/eqnedit.php?latex=P(x)&space;=&space;\prod_{d=1}^D&space;p(x_d|x_{1:d-1})" target="_blank"><img src="https://latex.codecogs.com/gif.latex?P(x)&space;=&space;\prod_{d=1}^D&space;p(x_d|x_{1:d-1})" title="P(x) = \prod_{d=1}^D p(x_d|x_{1:d-1})" /></a>  
+<img src="https://i.upmath.me/svg/P(x)%20%3D%20%5Cprod_%7Bd%3D1%7D%5ED%20P(x_d%7Cx_%7B1%3Ad%7D)"/>  
 
 [MADE](AutoRegressive/MADE/)  
 [Gated Pixel CNN](AutoRegressive/GatedPixelCNN/)
