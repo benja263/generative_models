@@ -112,7 +112,7 @@ if __name__ == '__main__':
     parser.add_argument('--K', type=int, help='number steps per scale',
                         default=32)
     parser.add_argument('--load_model', action='store_true', help='load pre-trained model')
-    parser.add_argument('-md', '--model_dir', type=Path, help='Directory of pre-trained model', default='results')
+    parser.add_argument('-md', '--model_dir', type=Path, help='Directory of pre-trained model', default='results/glow')
     parser.add_argument('-fn', '--filename', type=str, help='filename of pre_trained model')
     args = parser.parse_args()
     print('-- Entered Arguments --')

@@ -28,7 +28,7 @@ def train_epoch(model, data_loader, optimizer, num_colors, grad_clip=None,
         logit, log_det = process_data(batch, num_colors, alpha, dequantize)
         batch_size, C, H, W = logit.shape
         log_prob = model.log_prob(logit) + log_det
-        batch_loss = -torch.mean(log_prob) / (C * H * W)
+        batch_loss = -torch.mean(log_prob) / (np.log(2) * C * H * W)
         optimizer.zero_grad()
         batch_loss.backward()
         if grad_clip:
@@ -61,7 +61,7 @@ def evaluate(model, data_loader, num_colors, alpha=0.05, dequantize=True):
             logit, log_det = process_data(batch, num_colors, alpha, dequantize)
             batch_size, C, H, W = logit.shape
             log_prob = model.log_prob(logit) + log_det
-            batch_loss = -torch.mean(log_prob) / (C * H * W)
+            batch_loss = -torch.mean(log_prob) / (np.log(2) * C * H * W)
             total_loss += batch_loss * batch_size
     return total_loss.item() / len(data_loader)
 

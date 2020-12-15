@@ -2,11 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from Flow.RealNVP.layers import Resnet
-
 
 class ActNorm(nn.Module):
-    def __init__(self, num_channels):
+    def __init__(self, num_channels, eps=1e-6):
         """ Per Channel scale and bias learnable parameters initialized such that the post activations channels have
           0 mean and unit variance given the first minibatch """
         super(ActNorm, self).__init__()
@@ -14,6 +12,7 @@ class ActNorm(nn.Module):
         self.center = nn.Parameter(torch.zeros(1, num_channels, 1, 1), requires_grad=True)
         self.num_channels = num_channels
         self.initialized = False
+        self.eps = eps
 
     def forward(self, x, reverse=False):
         _, _, H, W = x.shape
@@ -23,7 +22,7 @@ class ActNorm(nn.Module):
             if not self.initialized:
                 self.center.data = -torch.mean(x, dim=[0, 2, 3], keepdim=True)
                 scale = torch.std(x, dim=[0, 2, 3])
-                self.log_scale.data = - torch.log(scale.reshape(1, self.num_channels, 1, 1))
+                self.log_scale.data = - torch.log(scale.reshape(1, self.num_channels, 1, 1) + self.eps)
                 self.initialized = True
             return x * torch.exp(self.log_scale) + self.center, self.log_scale.sum() * H * W
 
@@ -56,14 +55,13 @@ class AffineTransform(nn.Module):
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
 
-        self.resnet = Resnet(in_channels=num_channels, out_channels=2*num_channels, num_blocks=n_res_blocks,
-                             num_filters=num_filters)
+        self.NN = NN(in_channels=num_channels, out_channels=2 * num_channels, num_filters=num_filters)
 
     def forward(self, x, reverse=False):
         batch_size, num_channels, _, _ = x.shape
 
         x_a, x_b = x.split(num_channels // 2, dim=1)
-        log_s, t = self.resnet(x_b).split(num_channels // 2, dim=1)
+        log_s, t = self.NN(x_b).split(num_channels // 2, dim=1)
         log_s = self.scale * torch.tanh(log_s) + self.scale_shift
 
         if reverse:  # inverting the transformation
@@ -71,3 +69,25 @@ class AffineTransform(nn.Module):
         else:
             x_a = x_a * torch.exp(log_s) + t
         return torch.cat([x_a, x_b], dim=1), log_s.view(batch_size, -1).sum(-1)
+
+
+class NN(nn.Module):
+    def __init__(self, in_channels, out_channels, num_filters):
+        super(NN, self).__init__()
+        self.net = nn.ModuleList([
+            nn.Conv2d(in_channels, num_filters, kernel_size=1, padding=0),
+            ActNorm(num_filters),
+            nn.ReLU(),
+            nn.Conv2d(num_filters, num_filters, kernel_size=3, padding=1),
+            ActNorm(num_filters),
+            nn.ReLU(),
+            nn.Conv2d(num_filters, out_channels, kernel_size=1, padding=0)]
+        )
+
+    def forward(self, x):
+        for op in self.net:
+            if isinstance(op, ActNorm):
+                x, _ = op(x)
+            else:
+                x = op(x)
+        return x
