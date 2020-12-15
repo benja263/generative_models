@@ -14,4 +14,6 @@ nested conditionals.
 A class of probabilistic generative models that model P(x) using the change of variables formula.  
 <img src="https://i.upmath.me/svg/p_%5Ctheta(x)%20%3D%20p(f_%5Ctheta(x))%7Cdet(%5Cfrac%7B%5Cpartial%20f_%5Ctheta(x)%7D%7B%5Cpartial%20x%5ET%7D)%7C" alt="p(x) = " />  
 Where f(x) = z is a latent variable and f is a bijection.  
-[RealNVP](Flow/RealNVP/)
+
+[RealNVP](Flow/RealNVP/)  
+[Glow](Flow/Glow/)
