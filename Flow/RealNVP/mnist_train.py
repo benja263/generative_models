@@ -52,17 +52,17 @@ def train(train_data, test_data, tr_params, model_params, data_shape, output_dir
                               scheduler, visible=epoch + 1 if tr_params['visible'] is not None else None)
         print('-- Evaluating --')
         test_loss = evaluate(model, test_loader, num_colors)
-        print(f"Epoch {epoch + 1}/{tr_params['num_epochs']} test_loss {test_loss:.5f}")
+        print(f"Epoch {epoch + 1}/{tr_epoch + tr_params['num_epochs']} test_loss {test_loss:.5f}")
         tr_losses.append(tr_loss)
         test_losses.append(test_loss)
         # saving model
         if (epoch + 1) % tr_params['save_every'] == 0:
             print('-- Saving Model --')
-            state = {'epoch': epoch,
+            state = {'epoch': epoch + 1,
                      'model_state_dict': model.state_dict(),
                      'optimizer_state_dict': optimizer.state_dict(),
                      'tr_losses': tr_losses,
-                     'te_losses': test_losses}
+                     'test_losses': test_losses}
             save_model_state(state, output_dir / f'{filename}_model_epoch{epoch + 1}.pt')
             print('-- Sampling --')
             raw_samples = model.sample(100)
@@ -79,7 +79,7 @@ def train(train_data, test_data, tr_params, model_params, data_shape, output_dir
              'model_state_dict': model.state_dict(),
              'optimizer_state_dict': optimizer.state_dict(),
              'tr_losses': tr_losses,
-             'te_losses': test_losses}
+             'test_losses': test_losses}
     save_model_state(state, output_dir / f'{filename}_model.pt')
     save_samples_plot(samples, output_dir / f'{filename}_samples.png')
 
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_filters', type=int, help='number of filters',
                         default=64)
     parser.add_argument('--load_model', action='store_true', help='load pre-trained model')
-    parser.add_argument('-md', '--model_dir', type=Path, help='Directory of pre-trained model', default='results')
+    parser.add_argument('-md', '--model_dir', type=Path, help='Directory of pre-trained model', default='results/realnvp')
     parser.add_argument('-fn', '--filename', type=str, help='filename of pre_trained model')
     args = parser.parse_args()
     print('-- Entered Arguments --')
@@ -130,8 +130,10 @@ if __name__ == '__main__':
         binarize = False
         filename = 'mnist_colored_realnvp'
     else:
-        tr = datasets.MNIST('data', train=True, download=False, transform=transforms.ToTensor())
-        te = datasets.MNIST('data', train=False, download=False, transform=transforms.ToTensor())
+        tr = datasets.MNIST('data', train=True, download=True, transform=transforms.Compose([
+            transforms.ToTensor()
+        ]))
+        te = datasets.MNIST('data', train=False, download=True, transform=transforms.ToTensor())
 
         tr = tr.data
         te = te.data

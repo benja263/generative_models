@@ -3,13 +3,12 @@ Script for training a RealNVP model on the MNIST dataset
 """
 import argparse
 from pathlib import Path
-import os
 
 import numpy as np
 import torch.utils.data as data
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
-from torch.optim import Adam, lr_scheduler
+from torch.optim import Adam
 
 from Flow.Glow.model import Glow
 from Flow.utils.train import train_epoch, evaluate, pre_process, DEVICE
@@ -36,7 +35,6 @@ def train(train_data, test_data, tr_params, model_params, output_dir, filename, 
     print(f'device found: {DEVICE}')
     model = Glow(**model_params).to(DEVICE)
     optimizer = Adam(params=model.parameters(), lr=tr_params['lr'], weight_decay=5e-5)
-    scheduler = lr_scheduler.MultiplicativeLR(optimizer, lambda _: 0.9999999)
     if pre_trained_path is None:
         tr_losses, test_losses = [], []
         tr_epoch = 0
@@ -49,11 +47,11 @@ def train(train_data, test_data, tr_params, model_params, output_dir, filename, 
         test_losses = checkpoint['test_losses']
 
     for epoch in range(tr_epoch, tr_epoch + tr_params['num_epochs']):
-        tr_loss = train_epoch(model, train_loader, optimizer, tr_params['num_colors'], tr_params['grad_clip'],
-                              scheduler, visible=epoch + 1 if tr_params['visible'] is not None else None)
+        tr_loss = train_epoch(model, train_loader, optimizer, tr_params['num_colors'], grad_clip=tr_params['grad_clip'],
+                              visible=epoch + 1 if tr_params['visible'] is not None else None)
         print('-- Evaluating --')
         test_loss = evaluate(model, test_loader, num_colors)
-        print(f"Epoch {epoch + 1}/{tr_params['num_epochs']} test_loss {test_loss:.5f}")
+        print(f"Epoch {epoch + 1}/{tr_epoch +  tr_params['num_epochs']} test_loss {test_loss:.5f}")
         tr_losses.append(tr_loss)
         test_losses.append(test_loss)
         # saving model
@@ -63,7 +61,7 @@ def train(train_data, test_data, tr_params, model_params, output_dir, filename, 
                      'model_state_dict': model.state_dict(),
                      'optimizer_state_dict': optimizer.state_dict(),
                      'tr_losses': tr_losses,
-                     'te_losses': test_losses}
+                     'test_losses': test_losses}
             print('-- Sampling --')
             raw_samples = model.sample(100)
             samples = pre_process(raw_samples, reverse=True)
@@ -79,7 +77,7 @@ def train(train_data, test_data, tr_params, model_params, output_dir, filename, 
              'model_state_dict': model.state_dict(),
              'optimizer_state_dict': optimizer.state_dict(),
              'tr_losses': tr_losses,
-             'te_losses': test_losses}
+             'test_losses': test_losses}
     save_model_state(state, output_dir / f'{filename}_model.pt')
     save_samples_plot(samples, output_dir / f'{filename}_samples.png')
 

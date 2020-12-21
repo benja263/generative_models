@@ -20,11 +20,14 @@ class ResnetBlock(nn.Module):
     def __init__(self, n_filters):
         super(ResnetBlock, self).__init__()
         self.block = nn.Sequential(
-            WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0),
+            nn.BatchNorm2d(n_filters),
+            WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0, bias=True),
             nn.ReLU(),
-            WeightNormConv2d(n_filters, n_filters, kernel_size=3, padding=1),
+            nn.BatchNorm2d(n_filters),
+            WeightNormConv2d(n_filters, n_filters, kernel_size=3, padding=1, bias=True),
             nn.ReLU(),
-            WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0),
+            nn.BatchNorm2d(n_filters),
+            WeightNormConv2d(n_filters, n_filters, kernel_size=1, padding=0, bias=True),
         )
 
     def forward(self, x):
@@ -41,15 +44,17 @@ class Resnet(nn.Module):
         :param num_blocks:
         """
         super(Resnet, self).__init__()
-        layers = [WeightNormConv2d(in_channels, num_filters, (3, 3), stride=1, padding=1),
+        self.norm_input = nn.BatchNorm2d(in_channels)
+        layers = [WeightNormConv2d(in_channels, num_filters, (3, 3), stride=1, padding=1, bias=True),
                   nn.ReLU()]
         for _ in range(num_blocks):
             layers.append(ResnetBlock(num_filters))
-        layers.append(nn.ReLU())
-        layers.append(WeightNormConv2d(num_filters, out_channels, (3, 3), stride=1, padding=1))
+        layers.extend([nn.ReLU(), nn.BatchNorm2d(num_filters),
+                       WeightNormConv2d(num_filters, out_channels, (3, 3), stride=1, padding=1, bias=True)])
         self.resnet = nn.Sequential(*layers)
 
     def forward(self, x):
+        x = self.norm_input(x)
         return self.resnet(x)
 
 
@@ -64,12 +69,10 @@ class AffineCheckerboardTransform(nn.Module):
         self.resnet = Resnet(in_channels=C, out_channels=2 * C, num_blocks=n_res_blocks, num_filters=num_filters)
 
     def build_mask(self, pattern, image_shape):
-        # if type == 1.0, the top left corner will be 1.0
-        # if type == 0.0, the top left corner will be 0.0
-        add = 1.0 if pattern == 'even' else 0.0
+        numeric_pattern = 1.0 if pattern == 'even' else 0.0
         H, W = image_shape
         mask = torch.arange(H).unsqueeze(1) + torch.arange(W)
-        mask = torch.remainder(add + mask, 2)
+        mask = torch.remainder(numeric_pattern + mask, 2)
         mask = mask.reshape(-1, 1, H, W)
         return mask.float().to(DEVICE)
 

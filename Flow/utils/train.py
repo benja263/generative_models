@@ -25,19 +25,20 @@ def train_epoch(model, data_loader, optimizer, num_colors, grad_clip=None,
     model.train(mode=True)
     batch_losses = []
     for batch_idx, batch in enumerate(data_loader):
-        logit, log_det = process_data(batch, num_colors, alpha, dequantize)
-        batch_size, C, H, W = logit.shape
-        log_prob = model.log_prob(logit) + log_det
-        batch_loss = -torch.mean(log_prob) / (np.log(2) * C * H * W)
-        optimizer.zero_grad()
-        batch_loss.backward()
-        if grad_clip:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-        optimizer.step()
-        batch_losses.append(batch_loss.item())
-        if visible is not None:
-            pbar.set_description(f'Epoch {visible} train loss {np.mean(batch_losses):.5f}')
-            pbar.update(batch_size)
+        with torch.autograd.detect_anomaly():
+            logit, log_det = process_data(batch, num_colors, alpha, dequantize)
+            batch_size, C, H, W = logit.shape
+            log_prob = model.log_prob(logit) + log_det
+            batch_loss = -torch.mean(log_prob) / (np.log(2) * C * H * W)
+            optimizer.zero_grad()
+            batch_loss.backward()
+            if grad_clip:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            optimizer.step()
+            batch_losses.append(batch_loss.item())
+            if visible is not None:
+                pbar.set_description(f'Epoch {visible} train loss {np.mean(batch_losses):.5f}')
+                pbar.update(batch_size)
     if scheduler is not None:
         scheduler.step()
     if visible is not None:
@@ -74,11 +75,6 @@ def process_data(batch, num_colors, alpha, dequantize):
     :param binarize:
     :return:
     """
-    # if isinstance(batch, list):
-    #     x = (batch[0] * (num_colors - 1)).long()
-    # else:
-    # if binarize:
-    #     x = (x > 0.5).byte()
     x = batch.to(DEVICE).float()
     x, log_det = pre_process(x, False, dequantize, num_colors, alpha)
     return x, log_det

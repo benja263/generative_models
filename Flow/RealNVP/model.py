@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 
 from Flow.RealNVP.layers import AffineCheckerboardTransform, AffineChannelTransform
-from Flow.Glow.layers import ActNorm
 from Flow.utils.squeeze import squeeze, reverse_squeeze
 from utils import DEVICE
 
@@ -14,20 +13,15 @@ class RealNVPScale(nn.Module):
         self.last_scale = scale_idx == num_scales - 1
         self.checker_board = nn.ModuleList([
             AffineCheckerboardTransform(image_shape, 'even', n_res_blocks, num_filters),
-            ActNorm(C),
             AffineCheckerboardTransform(image_shape, 'odd', n_res_blocks, num_filters),
-            ActNorm(C),
             AffineCheckerboardTransform(image_shape, 'even', n_res_blocks, num_filters),
         ])
         if self.last_scale:
-            self.checker_board.extend([ActNorm(C),
-                                       AffineCheckerboardTransform(image_shape, 'odd', n_res_blocks, num_filters)])
+            self.checker_board.extend([AffineCheckerboardTransform(image_shape, 'odd', n_res_blocks, num_filters)])
         else:
             self.channel_transforms = nn.ModuleList([
                 AffineChannelTransform(C, True, n_res_blocks, num_filters),
-                ActNorm(4*C),
                 AffineChannelTransform(C, False, n_res_blocks, num_filters),
-                ActNorm(4*C),
                 AffineChannelTransform(C, True, n_res_blocks, num_filters)
             ])
             self.next_scale = RealNVPScale(scale_idx + 1, num_scales, (2 * C, H // 2, W // 2), n_res_blocks,
@@ -53,13 +47,11 @@ class RealNVPScale(nn.Module):
             for op in self.channel_transforms:
                 z, delta_log_det = op(z)
                 log_det += delta_log_det
-            # z = reverse_squeeze(z)
-            # Re-squeeze in alternating order -> split -> next block
-            # z = alt_order_squeeze(z)
+
             x, factored_z = z.chunk(2, dim=1)
             z, log_det = self.next_scale(x, log_det)
             z = torch.cat((z, factored_z), dim=1)
-            # z = reverse_alt_order_squeeze(z)
+
             z = reverse_squeeze(z)
         return z, log_det
 
@@ -85,7 +77,6 @@ class RealNVPScale(nn.Module):
 
 
 class RealNVP(nn.Module):
-    """ https://github.com/taesungp/"""
 
     def __init__(self, image_shape, n_res_blocks=6, num_scales=2, num_filters=32):
         super(RealNVP, self).__init__()
@@ -114,35 +105,3 @@ class RealNVP(nn.Module):
             C, H, W = self.image_shape
             z = self.prior.sample([num_samples, C, H, W])
             return self.g(z).cpu()
-
-# def alt_order_squeeze(x):
-#     B, C, H, W = x.shape
-#     perm_weight = get_permutation_weights(x, C)
-#     return F.conv2d(x, perm_weight, stride=2)
-#
-#
-# def reverse_alt_order_squeeze(x):
-#     B, C, H, W = x.shape
-#     if C % 4 != 0:
-#         raise ValueError('Number of channels must be divisible by 4, got {}.'.format(C))
-#     C //= 4
-#     perm_weight = get_permutation_weights(x, C)
-#     return F.conv_transpose2d(x, perm_weight, stride=2)
-#
-#
-# def get_permutation_weights(x, C):
-#     # Defines permutation of input channels (shape is (4, 1, 2, 2)).
-#     squeeze_matrix = torch.tensor([[[[1., 0.], [0., 0.]]],
-#                                    [[[0., 0.], [0., 1.]]],
-#                                    [[[0., 1.], [0., 0.]]],
-#                                    [[[0., 0.], [1., 0.]]]],
-#                                   dtype=x.dtype,
-#                                   device=x.device)
-#     perm_weight = torch.zeros((4 * C, C, 2, 2), dtype=x.dtype, device=x.device)
-#     for c_idx in range(C):
-#         perm_weight[c_idx * 4:c_idx * 4 + 4, c_idx:c_idx + 1, :, :] = squeeze_matrix
-#     shuffle_channels = torch.tensor([c_idx * 4 for c_idx in range(C)]
-#                                     + [c_idx * 4 + 1 for c_idx in range(C)]
-#                                     + [c_idx * 4 + 2 for c_idx in range(C)]
-#                                     + [c_idx * 4 + 3 for c_idx in range(C)])
-#     return perm_weight[shuffle_channels, :, :, :]
