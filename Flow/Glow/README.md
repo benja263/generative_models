@@ -12,6 +12,11 @@ A replacement to Real-NVP's fixed permutations.
 
 ![Multiscale architecture](../../images/glow1.png)
 
+## Run 
+```
+python3 Flow/Glow/mnist_train.py
+```
+
 ## Results
 ![mnist binary](../../results/mnist_glow_samples.png)
 

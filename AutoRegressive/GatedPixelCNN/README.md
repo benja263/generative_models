@@ -11,6 +11,11 @@ The GatedPixelCNN [2] removes the blind spot, replaces the relu activation unit 
 ![gated block](../../images/gated_block.jpg)  
 A detailed explanation can be found in [Sergei Turukin's blog](https://sergeiturukin.com/2017/02/24/gated-pixelcnn.html).
 
+## Run 
+```
+python3 AutoRegressive/GatedPixelCNN/mnist_train.py
+```
+
 ## Results
 All models were trained with  10 - 15 epochs on a single GPU, with a learning rate of 1e-3, 6 gated blocks.  
 Hyperparameter search was not done

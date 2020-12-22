@@ -64,7 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('-nf', '--num_h_filters', type=int, help='Number of filters in hidden layers', default=120)
     parser.add_argument('-of', '--num_o_filters', type=int, help='Number of filters in output layer', default=30)
     parser.add_argument('-u', '--label_conditioning', action='store_true', help='Condition on  labels')
-    parser.add_argument('-c', '--color_conditioning', action='store_true', help='Dependent color channels')
+    parser.add_argument('-c', '--colored_mnist', action='store_true', help='use colored mnist dataset')
     parser.add_argument('-v', '--visible', action='store_true', help='Use visible sampling progress bar')
     parser.add_argument('-o', '--output_dir', type=Path, help='Use visible sampling progress bar', default='results/gatedpixelcnn')
     parser.add_argument('-bz', '--batch_size', type=int, help='training and test batch sizez',
@@ -76,8 +76,8 @@ if __name__ == '__main__':
     for arg in vars(args):
         print(f'- {arg}: {getattr(args, arg)}')
 
-    if args.color_conditioning:
-        mnist_colored = load_pickle('../../data/mnist_colored.pkl')
+    if args.colored_mnist:
+        mnist_colored = load_pickle('data/mnist_colored.pkl')
         tr, te = mnist_colored['train'], mnist_colored['test']
         tr = np.transpose(tr, (0, 3, 1, 2))
         te = np.transpose(te, (0, 3, 1, 2))

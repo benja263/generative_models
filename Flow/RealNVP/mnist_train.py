@@ -81,7 +81,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--grad_clip', type=float, help='Value to clip norm of gradient to')
     parser.add_argument('-nl', '--num_layers', type=int, help='Number of horizontal and vertical layers', default=8)
     parser.add_argument('-b', '--binarize', action='store_true', help='Binarize grayscale mnist -- not relevant for rgb mnist')
-    parser.add_argument('-c', '--color_conditioning', action='store_true', help='Dependent color channels')
+    parser.add_argument('-c', '--colored_mnist', action='store_true', help='use colored mnist dataset')
     parser.add_argument('-v', '--visible', action='store_true', help='Use visible sampling progress bar')
     parser.add_argument('-o', '--output_dir', type=Path, help='Output directory', default='results/realnvp')
     parser.add_argument('-s', '--save_every', type=int, help='Number of iterations between model saving every',
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     for arg in vars(args):
         print(f'- {arg}: {getattr(args, arg)}')
 
-    if args.color_conditioning:
+    if args.colored_mnist:
         mnist_colored = load_pickle('data/mnist_colored.pkl')
         tr, te = mnist_colored['train'], mnist_colored['test']
         tr = np.transpose(tr, (0, 3, 1, 2))

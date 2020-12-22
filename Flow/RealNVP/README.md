@@ -12,6 +12,11 @@ To alternate between unchanged parts in the affine coupling layers, checkerboard
 
 This implementation consists of a multi-scale architecture while half of the dimensions are factored out in regular intervals to avoid high computational and memory costs.
 
+## Run 
+```
+python3 Flow/RealNVP/mnist_train.py
+```
+
 ## Results
 ![mnist binary](../../results/mnist_realnvp_samples.png)
 ## References

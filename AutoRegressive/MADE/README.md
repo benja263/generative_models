@@ -16,5 +16,6 @@ add ```--binarize``` for binarized MNIST
 ### Binarized MNIST
 ![MADE results binarized](../../results/mnist_MADE_samples.png)
 
-
+## References
+1)  Mathieu Germain, Karol Gregor, Iain Murray, and Hugo Larochelle.  Made: Masked autoencoder for distribution estimation, 2015. [arXiv:1502.03509](https://arxiv.org/abs/1502.03509)  
 
