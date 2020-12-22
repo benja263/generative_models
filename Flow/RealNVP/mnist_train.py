@@ -43,22 +43,22 @@ def train(train_data, test_data, tr_params, model_params, data_shape, output_dir
         checkpoint = load_model_checkpoint(pre_trained_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        tr_epoch = checkpoint['epoch']
+        tr_epoch = checkpoint['epoch'] + 1
         tr_losses = checkpoint['tr_losses']
         test_losses = checkpoint['test_losses']
 
     for epoch in range(tr_epoch, tr_epoch + tr_params['num_epochs']):
         tr_loss = train_epoch(model, train_loader, optimizer, tr_params['num_colors'], tr_params['grad_clip'],
-                              scheduler, visible=epoch + 1 if tr_params['visible'] is not None else None)
+                              scheduler, visible=epoch if tr_params['visible'] is not None else None)
         print('-- Evaluating --')
         test_loss = evaluate(model, test_loader, num_colors)
-        print(f"Epoch {epoch + 1}/{tr_epoch + tr_params['num_epochs']} test_loss {test_loss:.5f}")
+        print(f"Epoch {epoch}/{tr_epoch + tr_params['num_epochs']} test_loss {test_loss:.5f}")
         tr_losses.append(tr_loss)
         test_losses.append(test_loss)
         # saving model
         if (epoch + 1) % tr_params['save_every'] == 0:
             print('-- Saving Model --')
-            state = {'epoch': epoch + 1,
+            state = {'epoch': epoch,
                      'model_state_dict': model.state_dict(),
                      'optimizer_state_dict': optimizer.state_dict(),
                      'tr_losses': tr_losses,

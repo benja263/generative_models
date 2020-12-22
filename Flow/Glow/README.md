@@ -13,7 +13,7 @@ A replacement to Real-NVP's fixed permutations.
 ![Multiscale architecture](../../images/glow1.png)
 
 ## Results
-
+![mnist binary](../../results/mnist_glow_samples.png)
 
 ## References
 1) Laurent Dinh, Jascha Sohl-Dickstein, and Samy Bengio. Density estimation using real nvp, 2017 [arXiv:1605.08803](https://arxiv.org/abs/1605.08803)    

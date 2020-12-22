@@ -13,6 +13,6 @@ To alternate between unchanged parts in the affine coupling layers, checkerboard
 This implementation consists of a multi-scale architecture while half of the dimensions are factored out in regular intervals to avoid high computational and memory costs.
 
 ## Results
-
+![mnist binary](../../results/mnist_realnvp_samples.png)
 ## References
 1) Laurent Dinh, Jascha Sohl-Dickstein, and Samy Bengio. Density estimation using real nvp, 2017 [arXiv:1605.08803](https://arxiv.org/abs/1605.08803)  
