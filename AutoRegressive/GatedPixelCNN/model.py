@@ -1,5 +1,6 @@
 """
-
+Module containing A GatedPixelCNN model
+See arXiv:1601.06759 & http://www.scottreed.info/files/iclr2017.pdf
 """
 import torch
 import torch.nn as nn
@@ -72,7 +73,7 @@ class GatedBlock(nn.Module):
         x_h_tan, x_h_sig = x_h_forward.chunk(2, dim=1)
         x_h_forward = torch.tanh(x_h_tan) * torch.sigmoid(x_h_sig)
 
-        # convolving residual and skip connections separately
+        # separate convolutions for residual and skip connections
         x_h = self.res_conv(x_h_forward) + x_h
         x_skip = self.skip_conv(x_h_forward)
         return torch.cat((x_v, x_h), dim=1), x_skip
@@ -84,7 +85,7 @@ class GatedPixelCNN(nn.Module):
         """
 
         :param tuple input_shape: shape of input [Channels, Height, Width]
-        :param int num_colors: number of colors in image
+        :param int num_colors: number of unique values pixels can take in the image
         :param int num_layers: number of gated blocks
         :param int num_h_filters: number of filters in gated_blocks
         :param int num_o_filters: number of filters in output
@@ -150,6 +151,13 @@ class GatedPixelCNN(nn.Module):
         return F.cross_entropy(out, x.long())
 
     def sample(self, n, y=None, visible=False):
+        """
+        Sequential sampling
+        :param int n: number of samples
+        :param torch.Tensor y: one hot encoding of labels used when samples are label conditioned
+        :param bool visible:
+        :return:
+        """
         C, H, W = self.input_shape
         samples = torch.zeros(n, *self.input_shape, dtype=torch.float32).to(DEVICE)
         with torch.no_grad():
@@ -163,7 +171,6 @@ class GatedPixelCNN(nn.Module):
                             samples[:, channel, row, col] = sample
                             if prog is not None:
                                 prog.update()
-
             prog = tqdm(total=H*W*C, desc='Sample') if visible else None
             _sample(prog)
         return samples.cpu()

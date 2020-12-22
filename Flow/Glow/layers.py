@@ -1,3 +1,6 @@
+"""
+Module containing layers for Glow model
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -31,7 +34,7 @@ class ActNorm(nn.Module):
 
 class Invertible_1x1_Conv2D(nn.Module):
     """
-    As described in the paper
+    As described in the paper see section B of arXiv:1807.03039
     """
     def __init__(self, num_channels):
 
@@ -51,13 +54,15 @@ class Invertible_1x1_Conv2D(nn.Module):
 
 
 class AffineTransform(nn.Module):
-    def __init__(self, num_channels, n_res_blocks, num_filters):
+    """
+    Affine transform layer see section 3.3 of arXiv:1807.03039 and arXiv:1410.8516
+    """
+    def __init__(self, num_channels, affine_params):
         super(AffineTransform, self).__init__()
         self.num_channels = num_channels
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
 
-        self.resnet = Resnet(in_channels=num_channels, out_channels=2 * num_channels, num_filters=num_filters,
-                             num_blocks=n_res_blocks)
+        self.resnet = Resnet(in_channels=num_channels, out_channels=2 * num_channels, **affine_params)
 
     def forward(self, x, reverse=False):
         batch_size, num_channels, _, _ = x.shape

@@ -42,7 +42,7 @@ def train(train_data, test_data, tr_params, model_params, output_dir, filename, 
         checkpoint = load_model_checkpoint(pre_trained_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        tr_epoch = checkpoint['epoch']
+        tr_epoch = checkpoint['epoch'] + 1
         tr_losses = checkpoint['tr_losses']
         test_losses = checkpoint['test_losses']
 
@@ -57,7 +57,7 @@ def train(train_data, test_data, tr_params, model_params, output_dir, filename, 
         # saving model
         if (epoch + 1) % tr_params['save_every'] == 0:
             print('-- Saving Model --')
-            state = {'epoch': epoch,
+            state = {'epoch': epoch + 1,
                      'model_state_dict': model.state_dict(),
                      'optimizer_state_dict': optimizer.state_dict(),
                      'tr_losses': tr_losses,
@@ -99,8 +99,6 @@ if __name__ == '__main__':
                         default=1)
     parser.add_argument('-bz', '--batch_size', type=int, help='training and test batch sizes',
                         default=64)
-    parser.add_argument('--num_samples', type=int, help='num_samples',
-                        default=None)
     parser.add_argument('--num_res_blocks', type=int, help='number of resnet blocks for scale parameter in checker board transform',
                         default=4)
     parser.add_argument('--num_scales', type=int, help='number of scales',
@@ -109,9 +107,8 @@ if __name__ == '__main__':
                         default=64)
     parser.add_argument('--K', type=int, help='number steps per scale',
                         default=32)
-    parser.add_argument('--load_model', action='store_true', help='load pre-trained model')
     parser.add_argument('-md', '--model_dir', type=Path, help='Directory of pre-trained model', default='results/glow')
-    parser.add_argument('-fn', '--filename', type=str, help='filename of pre_trained model')
+    parser.add_argument('-fn', '--pre_trained_filename', type=str, help='filename of pre_trained model')
     args = parser.parse_args()
     print('-- Entered Arguments --')
     for arg in vars(args):
@@ -139,26 +136,25 @@ if __name__ == '__main__':
         if args.binarize:
             tr = (tr > 127.5).byte()
             te = (te > 127.5).byte()
+
         tr = tr.unsqueeze(1)
         te = te.unsqueeze(1)
 
         _, C, H, W = tr.shape
         num_colors = 2 if args.binarize else 256
         filename = 'mnist_glow'
-        if args.num_samples is not None:
-            tr = data.Subset(tr, list(range(args.num_samples)))
-            te = data.Subset(te, list(range(args.num_samples)))
 
-    model_params = {'n_res_blocks': args.num_res_blocks, 'num_scales': args.num_scales,
+    model_params = {'num_res_blocks': args.num_res_blocks, 'num_scales': args.num_scales,
                     'num_filters': args.num_filters, 'image_shape': (C, H, W), 'K': args.K}
     tr_params = {'num_colors': num_colors, 'num_epochs': args.num_epochs, 'lr': args.learning_rate,
                  'grad_clip': args.grad_clip, 'visible': args.visible, 'save_every': args.save_every,
                  'batch_size': args.batch_size, 'color_conditioning': args.color_conditioning}
 
-    if args.load_model:
+    if args.pre_trained_filename is not None:
         print('-- Loaded pre-trained model --')
 
     if not args.output_dir.exists():
         args.output_dir.mkdir(parents=True)
+
     train(tr, te, tr_params, model_params, args.output_dir, filename,
-          pre_trained_path=args.model_dir / args.filename if args.load_model else None)
+          pre_trained_path=args.model_dir / args.pre_trained_filename if args.pre_trained_filename is not None else None)

@@ -1,3 +1,6 @@
+"""
+Module containing utils for training Flow models
+"""
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -7,54 +10,31 @@ from utils import DEVICE
 
 
 def train_epoch(model, data_loader, optimizer, num_colors, grad_clip=None,
-                scheduler=None, alpha=0.05, dequantize=True,visible=None):
-    """
-    Train model for 1 epoch and return dictionary with the average training metric values
-    :param num_classes:
-    :param scheduler:
-    :param binarize:
-    :param visible:
-    :param nn.Module model:
-    :param DataLoader data_loader:
-    :param optimizer:
-    :param grad_clip:
-    :return:
-    """
+                alpha=0.05, dequantize=True, visible=None):
     if visible is not None:
         pbar = tqdm(total=len(data_loader.dataset))
     model.train(mode=True)
     batch_losses = []
     for batch_idx, batch in enumerate(data_loader):
-        with torch.autograd.detect_anomaly():
-            logit, log_det = process_data(batch, num_colors, alpha, dequantize)
-            batch_size, C, H, W = logit.shape
-            log_prob = model.log_prob(logit) + log_det
-            batch_loss = -torch.mean(log_prob) / (np.log(2) * C * H * W)
-            optimizer.zero_grad()
-            batch_loss.backward()
-            if grad_clip:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            optimizer.step()
-            batch_losses.append(batch_loss.item())
-            if visible is not None:
-                pbar.set_description(f'Epoch {visible} train loss {np.mean(batch_losses):.5f}')
-                pbar.update(batch_size)
-    if scheduler is not None:
-        scheduler.step()
+        logit, log_det = process_data(batch, num_colors, alpha, dequantize)
+        batch_size, C, H, W = logit.shape
+        log_prob = model.log_prob(logit) + log_det
+        batch_loss = -torch.mean(log_prob) / (np.log(2) * C * H * W)
+        optimizer.zero_grad()
+        batch_loss.backward()
+        if grad_clip:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        optimizer.step()
+        batch_losses.append(batch_loss.item())
+        if visible is not None:
+            pbar.set_description(f'Epoch {visible} train loss {np.mean(batch_losses):.5f}')
+            pbar.update(batch_size)
     if visible is not None:
         pbar.close()
     return np.mean(batch_losses)
 
 
 def evaluate(model, data_loader, num_colors, alpha=0.05, dequantize=True):
-    """
-
-    :param binarize:
-    :param num_classes:
-    :param model:
-    :param data_loader:
-    :return:
-    """
     model.eval()
     total_loss = 0.0
     with torch.no_grad():
@@ -69,10 +49,11 @@ def evaluate(model, data_loader, num_colors, alpha=0.05, dequantize=True):
 
 def process_data(batch, num_colors, alpha, dequantize):
     """
-
+    Pre process data by applying dequantization and logit transformation, see section 4.1 arXiv:1605.08803
     :param batch:
-    :param num_classes:
-    :param binarize:
+    :param num_colors:
+    :param alpha:
+    :param dequantize:
     :return:
     """
     x = batch.to(DEVICE).float()
@@ -81,6 +62,15 @@ def process_data(batch, num_colors, alpha, dequantize):
 
 
 def pre_process(x, reverse=False, dequantize=True, num_colors=256, alpha=0.05):
+    """
+    Input pre_processing, see section 4.1 arXiv:1605.08803
+    :param x:
+    :param bool reverse:
+    :param bool dequantize:
+    :param int num_colors: number of unique pixel values
+    :param alpha:
+    :return:
+    """
     if reverse:
         x = 1.0 / (1 + torch.exp(-x))
         x -= alpha

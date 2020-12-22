@@ -1,3 +1,6 @@
+"""
+Module containing layers for RealNVP model
+"""
 import torch
 import torch.nn as nn
 
@@ -5,6 +8,9 @@ from utils import DEVICE
 
 
 class WeightNormConv2d(nn.Module):
+    """
+    Conv2d layer with normalized weights: see arXiv:1602.07868
+    """
     def __init__(self, in_dim, out_dim, kernel_size, stride=1, padding=0,
                  bias=True):
         super(WeightNormConv2d, self).__init__()
@@ -17,6 +23,9 @@ class WeightNormConv2d(nn.Module):
 
 
 class ResnetBlock(nn.Module):
+    """
+    A simple ResNet block with weight and batch normalization
+    """
     def __init__(self, n_filters):
         super(ResnetBlock, self).__init__()
         self.block = nn.Sequential(
@@ -37,11 +46,11 @@ class ResnetBlock(nn.Module):
 class Resnet(nn.Module):
     def __init__(self, in_channels, out_channels, num_filters, num_blocks):
         """
-        Resnet outputing s and t as deep convolutional neural networks
-        :param in_channels:
-        :param out_channels:
-        :param num_filters:
-        :param num_blocks:
+        Deep Resnet architecture for s and t parameters
+        :param int in_channels: number of input channels
+        :param int out_channels: number of output channels
+        :param int num_filters: number of channels in Resnet blocks
+        :param int num_blocks: number of resnet blocks
         """
         super(Resnet, self).__init__()
         self.norm_input = nn.BatchNorm2d(in_channels)
@@ -59,14 +68,20 @@ class Resnet(nn.Module):
 
 
 class AffineCheckerboardTransform(nn.Module):
-    def __init__(self, input_shape, pattern='even', n_res_blocks=6, num_filters=32):
+    def __init__(self, input_shape, pattern, affine_params):
+        """
+        Affine Checkerboard partitioning
+        :param tuple input_shape: [C, H, W]
+        :param str pattern: 'even' or 'odd' checkboard pattern
+        :param dict affine_params: ResNet parameters for affine parameters s and t
+        """
         super(AffineCheckerboardTransform, self).__init__()
         assert pattern in ['even', 'odd']
         C, H, W = input_shape
         self.mask = self.build_mask(pattern, (H, W))
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
-        self.resnet = Resnet(in_channels=C, out_channels=2 * C, num_blocks=n_res_blocks, num_filters=num_filters)
+        self.resnet = Resnet(in_channels=C, out_channels=2 * C, **affine_params)
 
     def build_mask(self, pattern, image_shape):
         numeric_pattern = 1.0 if pattern == 'even' else 0.0
@@ -77,7 +92,6 @@ class AffineCheckerboardTransform(nn.Module):
         return mask.float().to(DEVICE)
 
     def forward(self, x, reverse=False):
-        # returns transform(x), log_det
         batch_size, num_channels, _, _ = x.shape
         mask = self.mask.repeat(batch_size, 1, 1, 1)
         # section 3.4
@@ -94,18 +108,24 @@ class AffineCheckerboardTransform(nn.Module):
         else:
             x = x * torch.exp(log_s) + t
         # reduce determinant
-        return x, log_s.view(batch_size, -1).sum(-1)
+        det = log_s.view(batch_size, -1).sum(-1)
+        return x, det
 
 
 class AffineChannelTransform(nn.Module):
-    def __init__(self, num_channels, modify_top, n_res_blocks, num_filters):
+    def __init__(self, num_channels, modify_top, affine_params):
+        """
+        Channel partitioning
+        :param int num_channels: number of channels
+        :param bool modify_top:
+        :param dict affine_params: ResNet parameters for affine parameters s and t
+        """
         super(AffineChannelTransform, self).__init__()
         self.num_channels = num_channels
         self.top_half = modify_top
         self.scale = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.scale_shift = nn.Parameter(torch.zeros(1), requires_grad=True)
-        self.resnet = Resnet(in_channels=2 * num_channels, out_channels=4 * num_channels, num_blocks=n_res_blocks,
-                             num_filters=num_filters)
+        self.resnet = Resnet(in_channels=2 * num_channels, out_channels=4 * num_channels, **affine_params)
 
     def forward(self, x, reverse=False):
         batch_size, num_channels, _, _ = x.shape
@@ -121,7 +141,7 @@ class AffineChannelTransform(nn.Module):
         else:
             on = on * torch.exp(log_s) + t
 
-        if self.top_half:
-            return torch.cat([on, off], dim=1), log_s.view(batch_size, -1).sum(-1)
-        else:
-            return torch.cat([off, on], dim=1), log_s.view(batch_size, -1).sum(-1)
+        det = log_s.view(batch_size, -1).sum(-1)
+        out = torch.cat([on, off], dim=1) if self.top_half else torch.cat([off, on], dim=1)
+        return out, det
+

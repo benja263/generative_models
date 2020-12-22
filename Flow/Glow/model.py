@@ -1,3 +1,6 @@
+"""
+Module containing A Glow model
+"""
 import torch
 import torch.nn as nn
 
@@ -7,19 +10,21 @@ from utils import DEVICE
 
 
 class GlowScale(nn.Module):
-    def __init__(self, scale_idx, num_scales, num_channels, n_res_blocks, num_filters, K):
+    """
+    Single RealNVPScale
+    """
+    def __init__(self, scale_idx, num_scales, num_channels, affine_params, K):
         """
 
         :param num_channels:
-        :param n_res_blocks:
-        :param num_filters:
+        :param dict affine_params: parameters for ResNet
         :param int K: number of steps per scale
         """
         super(GlowScale, self).__init__()
         self.last_scale = scale_idx == num_scales - 1
-        self.steps = nn.ModuleList([FlowStep(num_channels, n_res_blocks, num_filters) for _ in range(K)])
+        self.steps = nn.ModuleList([FlowStep(num_channels, affine_params) for _ in range(K)])
         if not self.last_scale:
-            self.next_scale = GlowScale(scale_idx + 1, num_scales, 2 * num_channels, n_res_blocks, num_filters, K)
+            self.next_scale = GlowScale(scale_idx + 1, num_scales, 2 * num_channels, affine_params, K)
 
     def forward(self, z, log_det=None, reverse=False):
         if reverse:
@@ -57,11 +62,14 @@ class GlowScale(nn.Module):
 
 
 class FlowStep(nn.Module):
-    def __init__(self, num_channels, n_res_blocks, num_filters):
+    """
+    A Single flow step containing ActNorm followed by an invertible 1x1 Convolution and an affine coupling layer
+    """
+    def __init__(self, num_channels, affine_params):
         super(FlowStep, self).__init__()
         self.step = nn.ModuleList([ActNorm(num_channels),
                                    Invertible_1x1_Conv2D(num_channels),
-                                   AffineTransform(num_channels // 2, n_res_blocks, num_filters)
+                                   AffineTransform(num_channels // 2, affine_params)
                                    ])
 
     def forward(self, z, log_det=None, reverse=False):
@@ -77,14 +85,18 @@ class FlowStep(nn.Module):
 
 
 class Glow(nn.Module):
-    def __init__(self, image_shape, n_res_blocks=6, num_scales=2, K=32, num_filters=32):
+    """
+    Glow model implementing Multiscale architecture recursively
+    """
+    def __init__(self, image_shape, num_res_blocks=6, num_scales=2, K=32, num_filters=32):
         super(Glow, self).__init__()
         C, H, W = image_shape
+        affine_params = {'num_blocks': num_res_blocks, 'num_filters': num_filters}
         self.image_shape = image_shape
 
         self.prior = torch.distributions.Normal(torch.tensor(0.).to(DEVICE), torch.tensor(1.).to(DEVICE))
 
-        self.scales = GlowScale(0, num_scales, 4*C, n_res_blocks, num_filters, K)
+        self.scales = GlowScale(0, num_scales, 4 * C, affine_params, K)
 
     def g(self, z):
         # z -> x (inverse of f)

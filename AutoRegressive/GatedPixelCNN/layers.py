@@ -1,5 +1,5 @@
 """
-Module containing layers
+Module containing layers for GatedPixelCNN model
 """
 import torch
 import torch.nn as nn
@@ -28,7 +28,7 @@ class CroppedConv2d(nn.Conv2d):
 class MaskedConv2D(nn.Conv2d):
     def __init__(self, mask_type, color_conditioning=False, num_classes=None, **kwargs):
         """
-        Masked 2D-Convolution
+        Masked 2D-Convolution as in arXiv:1601.06759
 
         :param str mask_type: type 'A' or 'B'
         :param int c_in: number of input channels
@@ -44,23 +44,20 @@ class MaskedConv2D(nn.Conv2d):
         self.mask[:, :, :height // 2] = 1
         self.mask[:, :, height // 2, :width // 2] = 1
         if color_conditioning:
-            self.dependent_color_masking(self.weight.size(), mask_type)
+            self.dependent_color_masking()
         elif mask_type == 'B':
             self.mask[:, :, height // 2, width // 2] = 1
         if num_classes is not None:
             self.label_bias = nn.Linear(num_classes, ch_out)
 
-    def dependent_color_masking(self, weight_shape, mask_type):
+    def dependent_color_masking(self):
         """
-
-        :param weight_shape:
-        :param mask_type:
-        :return:
+        Mask RGB channels as in arXiv:1601.06759
         """
-        ch_out, ch_in, height, width = weight_shape
+        ch_out, ch_in, height, width = self.weight.size()
         assert ch_out % 3 == 0 and ch_in % 3 == 0
         one_third_in, one_third_out = ch_in // 3, ch_out // 3
-        if mask_type == 'B':
+        if self.mask_type == 'B':
             self.mask[:one_third_out, :one_third_in, height // 2, width // 2] = 1
             self.mask[one_third_out:2 * one_third_out, :2 * one_third_in, height // 2, width // 2] = 1
             self.mask[2 * one_third_out:, :, height // 2, width // 2] = 1

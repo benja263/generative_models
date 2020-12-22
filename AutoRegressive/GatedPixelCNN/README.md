@@ -14,13 +14,13 @@ A detailed explanation can be found in [Sergei Turukin's blog](https://sergeitur
 ## Results
 All models were trained with  10 - 15 epochs on a single GPU, with a learning rate of 1e-3, 6 gated blocks.  
 Hyperparameter search was not done
-### Binary MNIST with class label conditioning
+### Binary MNIST with label conditioning
 ![MNIST class label conditioning](../../results/mnist_label_cond_gatedpixelcnn_samples.png)
-### Colored MNIST - color values in [0, 3]
+### Colored MNIST - pixel values in [0, 3]
 ![MNIST color conditioning](../../results/mnist_colored_cond_gatedpixelcnn_samples.png)
 
 
 ## References
-1) Aaron van den Oord, Nal Kalchbrenner, and Koray Kavukcuoglu.  Pixel recurrent neural networks, 2016 [arXiv:1601.06759 ](https://arxiv.org/abs/1601.06759)  
+1) Aaron van den Oord, Nal Kalchbrenner, and Koray Kavukcuoglu.  Pixel recurrent neural networks, 2016 [arXiv:1601.06759](https://arxiv.org/abs/1601.06759)  
 2) Aaron van den Oord, Nal Kalchbrenner, Oriol Vinyals, Lasse Espeholt, Alex Graves, andKoray Kavukcuoglu.  Conditional image generation with pixelcnn decoders, 2016. [arXiv:1606.05328](https://arxiv.org/abs/1606.05328)  
 3) S. Reed, A. van den Oord, N. Kalchbrenner, V. Bapst,M. Botvinick, and N. de Freitas. Generating interpretable images with controllable structure. Technical report, Techni-cal report, 2016. 2, 2016 [http://www.scottreed.info/files/iclr2017.pdf](http://www.scottreed.info/files/iclr2017.pdf)  

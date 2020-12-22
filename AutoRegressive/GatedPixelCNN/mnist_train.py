@@ -10,43 +10,36 @@ import torch.nn.functional as F
 import torch.utils.data as data
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
-from torch.optim import Adam, lr_scheduler
+from torch.optim import Adam
 
 from AutoRegressive.GatedPixelCNN.model import GatedPixelCNN
-from utils.helpers import load_pickle, save_model_state, save_training_plot, save_samples_plot
 from AutoRegressive.utils.train import train_epoch, evaluate, DEVICE
+from utils.helpers import load_pickle, save_model_state, save_training_plot, save_samples_plot
 
 
 def train(train_data, test_data, tr_params, model_params, data_shape, output_dir, filename):
 
-    num_epochs, lr, grad_clip = tr_params['num_epochs'], tr_params['lr'], tr_params['grad_clip']
-    binarize, batch_size, save_every = tr_params['binarize'], tr_params['batch_size'], tr_params['save_every']
-
-    train_loader = data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    test_loader = data.DataLoader(test_data, batch_size=batch_size)
+    train_loader = data.DataLoader(train_data, batch_size=tr_params['batch_size'], shuffle=True)
+    test_loader = data.DataLoader(test_data, batch_size=tr_params['batch_size'])
 
     print(f'device found: {DEVICE}')
     model = GatedPixelCNN(data_shape, **model_params).to(DEVICE)
-    optimizer = Adam(params=model.parameters(), lr=lr)
-    scheduler = lr_scheduler.MultiplicativeLR(optimizer, lambda _: 0.9999999)
+    optimizer = Adam(params=model.parameters(), lr=tr_params['lr'])
 
     tr_losses, test_losses = [], []
-    for epoch in range(num_epochs):
-        tr_loss = train_epoch(model, train_loader, optimizer, num_classes, grad_clip, scheduler,
-                              visible=epoch+1 if tr_params['visible'] is not None else None,
-                              binarize=binarize)
+    for epoch in range(tr_params['num_epochs']):
+        tr_loss = train_epoch(model, train_loader, optimizer, model_params['label_conditioning'],
+                              grad_clip=tr_params['grad_clip'], binarize=tr_params['binarize'],
+                              epoch=epoch + 1 if tr_params['visible'] is not None else None)
         print('-- Evaluating --')
-        test_loss = evaluate(model, test_loader, num_classes, binarize=binarize)
-        print(f'Epoch {epoch + 1}/{num_epochs} test_loss {test_loss:.5f}')
+        test_loss = evaluate(model, test_loader, model_params['label_conditioning'], binarize=tr_params['binarize'])
+        print(f"Epoch {epoch + 1}/{tr_params['num_epochs']} test_loss {test_loss:.5f}")
         tr_losses.append(tr_loss)
         test_losses.append(test_loss)
-        # saving model
-        if (epoch + 1) % save_every == 0:
-            print('-- Saving Model --')
-            save_model_state(model, output_dir / f'{filename}_model_epoch{epoch + 1}.pt')
-    if num_classes is not None:
-        cond = torch.arange(num_classes).unsqueeze(1).repeat(1, 100 // num_classes).view(-1).long()
-        one_hot = F.one_hot(cond, num_classes).float().to(DEVICE)
+
+    if model_params['label_conditioning'] is not None:
+        cond = torch.arange(model_params['label_conditioning']).unsqueeze(1).repeat(1, 100 // model_params['label_conditioning']).view(-1).long()
+        one_hot = F.one_hot(cond, model_params['label_conditioning']).float().to(DEVICE)
         samples = model.sample(100, y=one_hot, visible=tr_params['visible'])
     else:
         samples = model.sample(100, visible=tr_params['visible'])
@@ -73,9 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('-u', '--label_conditioning', action='store_true', help='Condition on  labels')
     parser.add_argument('-c', '--color_conditioning', action='store_true', help='Dependent color channels')
     parser.add_argument('-v', '--visible', action='store_true', help='Use visible sampling progress bar')
-    parser.add_argument('-o', '--output_dir', type=Path, help='Use visible sampling progress bar', default='results')
-    parser.add_argument('-s', '--save_every', type=int, help='Number of iterations between model saving every',
-                        default=1)
+    parser.add_argument('-o', '--output_dir', type=Path, help='Use visible sampling progress bar', default='results/gatedpixelcnn')
     parser.add_argument('-bz', '--batch_size', type=int, help='training and test batch sizez',
                         default=128)
     parser.add_argument('--num_samples', type=int, help='num_samples',
@@ -98,8 +89,8 @@ if __name__ == '__main__':
         binarize = False
         filename = 'mnist_colored_gatedpixelcnn'
     else:
-        tr = datasets.MNIST('../data', train=True, download=False, transform=transforms.ToTensor())
-        te = datasets.MNIST('../data', train=False, download=False, transform=transforms.ToTensor())
+        tr = datasets.MNIST('data', train=True, download=False, transform=transforms.ToTensor())
+        te = datasets.MNIST('data', train=False, download=False, transform=transforms.ToTensor())
         _, C, H, W = (tr.data.unsqueeze(1)).shape
         num_colors = 2
         binarize = True
@@ -108,16 +99,19 @@ if __name__ == '__main__':
             tr = data.Subset(tr, list(range(args.num_samples)))
             te = data.Subset(te, list(range(args.num_samples)))
     # number of label classes
-    num_classes = 10 if args.label_conditioning and not args.color_conditioning else None
+    num_labels = 10 if args.label_conditioning and not args.color_conditioning else None
     model_params = {'num_layers': args.num_layers, 'num_h_filters': args.num_h_filters,
-                    'num_o_filters': args.num_o_filters, 'num_classes': num_classes,
+                    'num_o_filters': args.num_o_filters, 'label_conditioning': num_labels,
                     'color_conditioning': args.color_conditioning, 'num_colors': num_colors}
+
     tr_params = {'num_epochs': args.num_epochs, 'lr': args.learning_rate,
                  'grad_clip': args.grad_clip, 'visible': args.visible,
                  'binarize': binarize, 'save_every': args.save_every,
                  'batch_size': args.batch_size}
 
-    train(tr, te, tr_params, model_params, (C, H, W),
-                                                   args.output_dir, filename)
+    if not args.output_dir.exists():
+        args.output_dir.mkdir(parents=True)
+
+    train(tr, te, tr_params, model_params, (C, H, W), args.output_dir, filename)
 
 
